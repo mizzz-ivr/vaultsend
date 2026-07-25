@@ -1,0 +1,48 @@
+name: セキュリティ基盤変更の一時gofmt
+
+on:
+  push:
+    branches:
+      - security/government-baseline-phase1
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+        with:
+          ref: security/government-baseline-phase1
+
+      - name: Goをセットアップ
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: 対象ファイルを整形
+        run: |
+          gofmt -w \
+            internal/config/config.go \
+            internal/http/middleware/rate_limit.go
+
+      - name: 整形差分をコミット
+        run: |
+          if git diff --quiet -- \
+            internal/config/config.go \
+            internal/http/middleware/rate_limit.go; then
+            echo '整形差分はありません。'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            internal/config/config.go \
+            internal/http/middleware/rate_limit.go
+          git commit -m 'セキュリティ基盤変更のGoコードを整形'
+          git push origin HEAD:security/government-baseline-phase1
