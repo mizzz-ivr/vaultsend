@@ -269,25 +269,25 @@ func (s *SecurityAuditService) integrityHMAC(params store.CreateSecurityAuditEve
 		return "", err
 	}
 	canonical := struct {
-		ID               string          `json:"id"`
-		OccurredAt       string          `json:"occurred_at"`
-		EventType        string          `json:"event_type"`
-		Severity         string          `json:"severity"`
-		Outcome          string          `json:"outcome"`
-		ActorType        string          `json:"actor_type"`
-		ActorUserID      string          `json:"actor_user_id"`
-		OrganizationID   string          `json:"organization_id"`
-		ResourceType     string          `json:"resource_type"`
-		ResourceID       string          `json:"resource_id"`
-		RequestID        string          `json:"request_id"`
-		SourceService    string          `json:"source_service"`
-		HTTPMethod       string          `json:"http_method"`
-		RoutePattern     string          `json:"route_pattern"`
-		StatusCode       int32           `json:"status_code"`
-		ClientIPHMAC     string          `json:"client_ip_hmac"`
-		UserAgentHMAC    string          `json:"user_agent_hmac"`
-		Details          json.RawMessage `json:"details"`
-		IntegrityKeyID   string          `json:"integrity_key_id"`
+		ID             string          `json:"id"`
+		OccurredAt     string          `json:"occurred_at"`
+		EventType      string          `json:"event_type"`
+		Severity       string          `json:"severity"`
+		Outcome        string          `json:"outcome"`
+		ActorType      string          `json:"actor_type"`
+		ActorUserID    string          `json:"actor_user_id"`
+		OrganizationID string          `json:"organization_id"`
+		ResourceType   string          `json:"resource_type"`
+		ResourceID     string          `json:"resource_id"`
+		RequestID      string          `json:"request_id"`
+		SourceService  string          `json:"source_service"`
+		HTTPMethod     string          `json:"http_method"`
+		RoutePattern   string          `json:"route_pattern"`
+		StatusCode     int32           `json:"status_code"`
+		ClientIPHMAC   string          `json:"client_ip_hmac"`
+		UserAgentHMAC  string          `json:"user_agent_hmac"`
+		Details        json.RawMessage `json:"details"`
+		IntegrityKeyID string          `json:"integrity_key_id"`
 	}{
 		ID:             params.ID.String(),
 		OccurredAt:     params.OccurredAt.UTC().Format(time.RFC3339Nano),
