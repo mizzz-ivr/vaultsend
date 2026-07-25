@@ -15,8 +15,8 @@ const defaultRateLimiterMaxEntries = 100000
 
 // RateLimitConfig はレート制限の設定を保持する。
 type RateLimitConfig struct {
-	PerMinuteLimit   int
-	VerifyLimit      int
+	PerMinuteLimit    int
+	VerifyLimit       int
 	TrustedProxyCIDRs []netip.Prefix
 }
 

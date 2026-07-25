@@ -38,12 +38,12 @@ type Config struct {
 	TrustedProxyCIDRs     []netip.Prefix
 	CSRFAllowedOrigins    []string
 
-	UploadURLTTL       time.Duration
-	PresignedURLTTL    time.Duration
-	AccessGrantTTL     time.Duration
-	UploadPartSize     int32
-	UploadMaxFileSize  int64
-	UploadMaxParts     int
+	UploadURLTTL      time.Duration
+	PresignedURLTTL   time.Duration
+	AccessGrantTTL    time.Duration
+	UploadPartSize    int32
+	UploadMaxFileSize int64
+	UploadMaxParts    int
 
 	RateLimitRPS        int
 	VerifyMaxAttempts   int
