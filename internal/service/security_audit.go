@@ -460,7 +460,7 @@ func trimToLength(value string, max int) string {
 
 func (s *SecurityAuditService) now() time.Time {
 	if s.Now != nil {
-		return s.Now().UTC()
+		return s.Now().UTC().Truncate(time.Microsecond)
 	}
-	return time.Now().UTC()
+	return time.Now().UTC().Truncate(time.Microsecond)
 }
