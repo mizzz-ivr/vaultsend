@@ -35,7 +35,8 @@ func ClientIP(r *http.Request, trustedProxyCIDRs []netip.Prefix) string {
 	return candidate.String()
 }
 
-// ClientIPHash はログ・セッション記録用にIPアドレスをSHA-256で不可逆化する。
+// ClientIPHash はログ・セッション記録で生IPを直接扱わないための仮名化値を返す。
+// 匿名化ではないため、ハッシュ値もアクセス制御・保管期間の対象として扱う。
 func ClientIPHash(ip string) string {
 	ip = strings.TrimSpace(ip)
 	if ip == "" {
