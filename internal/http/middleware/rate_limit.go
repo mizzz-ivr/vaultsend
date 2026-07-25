@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"log"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -11,10 +11,13 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
+const defaultRateLimiterMaxEntries = 100000
+
 // RateLimitConfig はレート制限の設定を保持する。
 type RateLimitConfig struct {
-	PerMinuteLimit int
-	VerifyLimit    int
+	PerMinuteLimit   int
+	VerifyLimit      int
+	TrustedProxyCIDRs []netip.Prefix
 }
 
 type rateCounter struct {
@@ -22,15 +25,24 @@ type rateCounter struct {
 	WindowEnd time.Time
 }
 
-// InMemoryRateLimiter はMVP向けの固定窓レート制限実装。
+// InMemoryRateLimiter は単一プロセス向けの固定窓レート制限実装。
 type InMemoryRateLimiter struct {
-	mu       sync.Mutex
-	counters map[string]rateCounter
-	now      func() time.Time
+	mu         sync.Mutex
+	counters   map[string]rateCounter
+	now        func() time.Time
+	maxEntries int
 }
 
-func NewInMemoryRateLimiter() *InMemoryRateLimiter {
-	return &InMemoryRateLimiter{counters: map[string]rateCounter{}, now: time.Now}
+func NewInMemoryRateLimiter(maxEntries ...int) *InMemoryRateLimiter {
+	limit := defaultRateLimiterMaxEntries
+	if len(maxEntries) > 0 && maxEntries[0] > 0 {
+		limit = maxEntries[0]
+	}
+	return &InMemoryRateLimiter{
+		counters:   map[string]rateCounter{},
+		now:        time.Now,
+		maxEntries: limit,
+	}
 }
 
 func (l *InMemoryRateLimiter) allow(key string, limit int, window time.Duration) bool {
@@ -43,7 +55,13 @@ func (l *InMemoryRateLimiter) allow(key string, limit int, window time.Duration)
 	defer l.mu.Unlock()
 
 	entry, ok := l.counters[key]
-	if !ok || now.After(entry.WindowEnd) {
+	if !ok || !now.Before(entry.WindowEnd) {
+		if !ok && len(l.counters) >= l.maxEntries {
+			l.removeExpired(now)
+			if len(l.counters) >= l.maxEntries {
+				return false
+			}
+		}
 		l.counters[key] = rateCounter{Count: 1, WindowEnd: now.Add(window)}
 		return true
 	}
@@ -55,21 +73,38 @@ func (l *InMemoryRateLimiter) allow(key string, limit int, window time.Duration)
 	return true
 }
 
-// RateLimit はIP+エンドポイント単位で制御する。
+func (l *InMemoryRateLimiter) removeExpired(now time.Time) {
+	for key, entry := range l.counters {
+		if !now.Before(entry.WindowEnd) {
+			delete(l.counters, key)
+		}
+	}
+}
+
+// RateLimit は信頼済みプロキシを考慮したIP+エンドポイント単位で制御する。
 func RateLimit(limiter *InMemoryRateLimiter, cfg RateLimitConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			endpoint := normalizedRateLimitEndpoint(r.Method, r.URL.Path)
 			limit := cfg.PerMinuteLimit
-			endpoint := r.Method + " " + r.URL.Path
-			if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/verify") && strings.Contains(r.URL.Path, "/v1/access/") {
+			if endpoint == "POST /v1/access/{token}/verify" {
 				limit = cfg.VerifyLimit
-				endpoint = "POST /v1/access/{token}/verify"
 			}
-			ip := clientIP(r)
+
+			ip := ClientIP(r, cfg.TrustedProxyCIDRs)
+			if ip == "" {
+				ip = "unknown"
+			}
 			key := ip + "|" + endpoint
 			if !limiter.allow(key, limit, time.Minute) {
 				reqID := chimw.GetReqID(r.Context())
-				log.Printf("event=rate_limit_hit request_id=%s ip=%s endpoint=%s limit=%d", reqID, ip, endpoint, limit)
+				log.Printf(
+					"event=rate_limit_hit request_id=%s client_ip_hash=%s endpoint=%s limit=%d",
+					reqID,
+					ClientIPHash(ip),
+					endpoint,
+					limit,
+				)
 				w.Header().Set("Retry-After", "60")
 				http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 				return
@@ -79,14 +114,40 @@ func RateLimit(limiter *InMemoryRateLimiter, cfg RateLimitConfig) func(http.Hand
 	}
 }
 
-func clientIP(r *http.Request) string {
-	if fwd := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); fwd != "" {
-		parts := strings.Split(fwd, ",")
-		return strings.TrimSpace(parts[0])
+func normalizedRateLimitEndpoint(method, path string) string {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) >= 2 && segments[0] == "v1" {
+		switch segments[1] {
+		case "access":
+			if len(segments) == 3 {
+				return method + " /v1/access/{token}"
+			}
+			if len(segments) == 4 && segments[3] == "verify" {
+				return method + " /v1/access/{token}/verify"
+			}
+		case "files":
+			if len(segments) == 4 && segments[3] == "download-url" {
+				return method + " /v1/files/{id}/download-url"
+			}
+		case "uploads":
+			if len(segments) == 4 && segments[3] == "complete" {
+				return method + " /v1/uploads/{id}/complete"
+			}
+		case "shipments":
+			if len(segments) == 3 {
+				return method + " /v1/shipments/{id}"
+			}
+			if len(segments) == 4 {
+				return method + " /v1/shipments/{id}/" + segments[3]
+			}
+		case "orgs":
+			if len(segments) == 3 {
+				return method + " /v1/orgs/{id}"
+			}
+			if len(segments) >= 4 {
+				return method + " /v1/orgs/{id}/" + strings.Join(segments[3:], "/")
+			}
+		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return method + " " + path
 }
