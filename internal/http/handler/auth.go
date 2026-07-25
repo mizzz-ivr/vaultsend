@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -15,10 +13,11 @@ import (
 )
 
 type AuthHandler struct {
-	Service        *service.AuthService
-	CookieDomain   string
-	CookieSecure   bool
-	CookieSameSite http.SameSite
+	Service           *service.AuthService
+	CookieDomain      string
+	CookieSecure      bool
+	CookieSameSite    http.SameSite
+	TrustedProxyCIDRs []netip.Prefix
 }
 
 type authResponse struct {
@@ -70,7 +69,12 @@ func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, "invalid_request", "email と password は必須です", chimw.GetReqID(r.Context()))
 		return
 	}
-	out, err := h.Service.Login(r.Context(), service.LoginInput{Email: req.Email, Password: req.Password, UserAgent: readUserAgent(r), IPHash: readIPHash(r)})
+	out, err := h.Service.Login(r.Context(), service.LoginInput{
+		Email:     req.Email,
+		Password:  req.Password,
+		UserAgent: readUserAgent(r),
+		IPHash:    readIPHash(r, h.TrustedProxyCIDRs),
+	})
 	if err != nil {
 		writeServiceError(w, r, err)
 		return
@@ -144,20 +148,10 @@ func readUserAgent(r *http.Request) *string {
 	return &ua
 }
 
-func readIPHash(r *http.Request) *string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	host = strings.TrimSpace(host)
-	if host == "" {
+func readIPHash(r *http.Request, trustedProxyCIDRs []netip.Prefix) *string {
+	hash := middleware.ClientIPHashFromRequest(r, trustedProxyCIDRs)
+	if hash == "" {
 		return nil
 	}
-	h := hashForIP(host)
-	return &h
-}
-
-func hashForIP(v string) string {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(v)))
-	return hex.EncodeToString(sum[:])
+	return &hash
 }
