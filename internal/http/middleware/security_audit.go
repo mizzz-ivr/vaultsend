@@ -196,22 +196,22 @@ func safeSecurityAuditRoutePattern(r *http.Request) string {
 func classifySecurityAuditRoute(method, routePattern string) (securityAuditRoute, bool) {
 	key := strings.ToUpper(strings.TrimSpace(method)) + " " + strings.TrimSpace(routePattern)
 	routes := map[string]securityAuditRoute{
-		"POST /v1/auth/register":                         {EventType: "auth.register", Severity: "info", ActorType: "anonymous", ResourceType: "user"},
-		"POST /v1/auth/login":                            {EventType: "auth.login", Severity: "info", ActorType: "anonymous", ResourceType: "session"},
-		"POST /v1/auth/logout":                           {EventType: "auth.logout", Severity: "info", ActorType: "user", ResourceType: "session"},
-		"POST /v1/uploads":                               {EventType: "upload.create", Severity: "info", ActorType: "anonymous", ResourceType: "upload"},
-		"POST /v1/uploads/{id}/complete":                 {EventType: "upload.complete", Severity: "info", ActorType: "anonymous", ResourceType: "upload", ResourceIDParam: "id"},
-		"POST /v1/shipments":                             {EventType: "shipment.create", Severity: "info", ActorType: "anonymous", ResourceType: "shipment"},
-		"POST /v1/shipments/{id}/resend":                 {EventType: "shipment.resend", Severity: "warning", ActorType: "user", ResourceType: "shipment", ResourceIDParam: "id"},
-		"DELETE /v1/shipments/{id}":                      {EventType: "shipment.delete", Severity: "warning", ActorType: "user", ResourceType: "shipment", ResourceIDParam: "id"},
-		"POST /v1/access/{token}/verify":                 {EventType: "access.verify", Severity: "info", ActorType: "recipient", ResourceType: "access_token"},
-		"GET /v1/files/{id}/download-url":                {EventType: "file.download_url.issue", Severity: "info", ActorType: "recipient", ResourceType: "file", ResourceIDParam: "id"},
-		"POST /v1/orgs":                                  {EventType: "organization.create", Severity: "info", ActorType: "user", ResourceType: "organization"},
-		"POST /v1/orgs/{id}/members":                     {EventType: "organization.member.add", Severity: "warning", ActorType: "user", ResourceType: "user", OrganizationID: "id"},
-		"DELETE /v1/orgs/{id}/members/{user_id}":         {EventType: "organization.member.remove", Severity: "warning", ActorType: "user", ResourceType: "user", ResourceIDParam: "user_id", OrganizationID: "id"},
-		"GET /v1/orgs/{id}/security-audit-events":        {EventType: "security_audit.read", Severity: "warning", ActorType: "user", ResourceType: "security_audit", OrganizationID: "id"},
-		"POST /v1/billing/checkout":                      {EventType: "billing.checkout", Severity: "info", ActorType: "user", ResourceType: "subscription"},
-		"POST /v1/billing/webhook":                       {EventType: "billing.webhook", Severity: "info", ActorType: "webhook", ResourceType: "subscription"},
+		"POST /v1/auth/register":                  {EventType: "auth.register", Severity: "info", ActorType: "anonymous", ResourceType: "user"},
+		"POST /v1/auth/login":                     {EventType: "auth.login", Severity: "info", ActorType: "anonymous", ResourceType: "session"},
+		"POST /v1/auth/logout":                    {EventType: "auth.logout", Severity: "info", ActorType: "user", ResourceType: "session"},
+		"POST /v1/uploads":                        {EventType: "upload.create", Severity: "info", ActorType: "anonymous", ResourceType: "upload"},
+		"POST /v1/uploads/{id}/complete":          {EventType: "upload.complete", Severity: "info", ActorType: "anonymous", ResourceType: "upload", ResourceIDParam: "id"},
+		"POST /v1/shipments":                      {EventType: "shipment.create", Severity: "info", ActorType: "anonymous", ResourceType: "shipment"},
+		"POST /v1/shipments/{id}/resend":          {EventType: "shipment.resend", Severity: "warning", ActorType: "user", ResourceType: "shipment", ResourceIDParam: "id"},
+		"DELETE /v1/shipments/{id}":               {EventType: "shipment.delete", Severity: "warning", ActorType: "user", ResourceType: "shipment", ResourceIDParam: "id"},
+		"POST /v1/access/{token}/verify":          {EventType: "access.verify", Severity: "info", ActorType: "recipient", ResourceType: "access_token"},
+		"GET /v1/files/{id}/download-url":         {EventType: "file.download_url.issue", Severity: "info", ActorType: "recipient", ResourceType: "file", ResourceIDParam: "id"},
+		"POST /v1/orgs":                           {EventType: "organization.create", Severity: "info", ActorType: "user", ResourceType: "organization"},
+		"POST /v1/orgs/{id}/members":              {EventType: "organization.member.add", Severity: "warning", ActorType: "user", ResourceType: "user", OrganizationID: "id"},
+		"DELETE /v1/orgs/{id}/members/{user_id}":  {EventType: "organization.member.remove", Severity: "warning", ActorType: "user", ResourceType: "user", ResourceIDParam: "user_id", OrganizationID: "id"},
+		"GET /v1/orgs/{id}/security-audit-events": {EventType: "security_audit.read", Severity: "warning", ActorType: "user", ResourceType: "security_audit", OrganizationID: "id"},
+		"POST /v1/billing/checkout":               {EventType: "billing.checkout", Severity: "info", ActorType: "user", ResourceType: "subscription"},
+		"POST /v1/billing/webhook":                {EventType: "billing.webhook", Severity: "info", ActorType: "webhook", ResourceType: "subscription"},
 	}
 	spec, ok := routes[key]
 	return spec, ok
