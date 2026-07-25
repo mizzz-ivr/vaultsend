@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/example/vaultsend/internal/http/middleware"
@@ -36,10 +37,6 @@ func (h SecurityAuditHandler) ListOrganizationEvents(w http.ResponseWriter, r *h
 		return
 	}
 	middleware.SetSecurityAuditOrganizationID(r.Context(), organizationID)
-	middleware.SetSecurityAuditDetail(r.Context(), "returned_items", int32ToString(int32(len(out.Items))))
+	middleware.SetSecurityAuditDetail(r.Context(), "returned_items", fmt.Sprintf("%d", len(out.Items)))
 	render.JSON(w, http.StatusOK, out)
-}
-
-func int32ToString(value int32) string {
-	return fmt.Sprintf("%d", value)
 }
