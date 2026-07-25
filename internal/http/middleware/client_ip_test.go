@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"testing"
+	"time"
 )
 
 func TestClientIPIgnoresForwardedHeaderFromUntrustedPeer(t *testing.T) {
@@ -48,12 +49,24 @@ func TestNormalizedRateLimitEndpointDoesNotExposeAccessToken(t *testing.T) {
 	}
 }
 
+func TestNormalizedRateLimitEndpointDoesNotExposeOrganizationResourceIDs(t *testing.T) {
+	tests := map[string]string{
+		"/v1/orgs/org-secret/members/user-secret":   "DELETE /v1/orgs/{id}/members/{resource_id}",
+		"/v1/orgs/org-secret/invoices/invoice-secret": "DELETE /v1/orgs/{id}/invoices/{resource_id}",
+	}
+	for path, want := range tests {
+		if got := normalizedRateLimitEndpoint("DELETE", path); got != want {
+			t.Fatalf("path=%s want=%q got=%q", path, want, got)
+		}
+	}
+}
+
 func TestRateLimiterFailsClosedAtEntryLimit(t *testing.T) {
 	limiter := NewInMemoryRateLimiter(1)
-	if !limiter.allow("client-1", 10, 60_000_000_000) {
+	if !limiter.allow("client-1", 10, time.Minute) {
 		t.Fatal("first key should be allowed")
 	}
-	if limiter.allow("client-2", 10, 60_000_000_000) {
+	if limiter.allow("client-2", 10, time.Minute) {
 		t.Fatal("new key must be rejected when limiter storage is full")
 	}
 }
