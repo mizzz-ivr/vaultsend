@@ -1,0 +1,101 @@
+name: 監査ログ変更の最終整形
+
+on:
+  push:
+    branches:
+      - security/append-only-audit-log
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+        with:
+          ref: security/append-only-audit-log
+
+      - name: Goをセットアップ
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: 監査時刻精度とREADMEを更新
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service = Path('internal/service/security_audit.go')
+          text = service.read_text()
+          text = text.replace(
+              'return s.Now().UTC()\n',
+              'return s.Now().UTC().Truncate(time.Microsecond)\n',
+          )
+          text = text.replace(
+              'return time.Now().UTC()\n',
+              'return time.Now().UTC().Truncate(time.Microsecond)\n',
+          )
+          service.write_text(text)
+
+          readme = Path('README.md')
+          text = readme.read_text()
+          marker = '## セキュリティ監査ログ\n'
+          if marker not in text:
+              text = text.rstrip() + '''
+
+## セキュリティ監査ログ
+
+重要な認証・組織管理・送信・受信・課金操作は、追記専用の`security_audit_events`へ記録します。
+
+本番環境では以下を必須設定とします。
+
+```bash
+export AUDIT_LOG_HMAC_SECRET='32バイト以上のランダムな秘密値'
+export AUDIT_LOG_HMAC_KEY_ID='prod-2026-01'
+```
+
+組織の`owner`または`admin`は、以下のAPIで監査ログを取得できます。
+
+```text
+GET /v1/orgs/{organization_id}/security-audit-events?limit=50&offset=0
+```
+
+IPアドレスとUser-Agentは生値を保存せず、監査専用秘密鍵によるHMAC-SHA256値として保持します。詳細な設計、保存禁止情報、改ざん防止、SIEM連携、鍵rotation、制約事項は`docs/security-audit-log-ja.md`を参照してください。
+'''
+              readme.write_text(text)
+          PY
+
+      - name: 変更したGoファイルを整形
+        run: |
+          gofmt -w \
+            cmd/api/main.go \
+            internal/config/security_audit.go \
+            internal/config/security_audit_test.go \
+            internal/http/handler/auth.go \
+            internal/http/handler/orgs.go \
+            internal/http/handler/security_audit.go \
+            internal/http/middleware/security_audit.go \
+            internal/http/middleware/security_audit_test.go \
+            internal/http/server.go \
+            internal/service/security_audit.go \
+            internal/service/security_audit_test.go \
+            internal/store/security_audit_events.go \
+            internal/store/security_audit_integration_test.go
+
+      - name: 変更をコミット
+        run: |
+          if git diff --quiet; then
+            echo '更新差分はありません。'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md internal cmd
+          git commit -m '監査ログ変更の整形と利用手順を反映'
+          git push origin HEAD:security/append-only-audit-log
