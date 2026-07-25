@@ -57,6 +57,33 @@ func TestSecurityAuditRecordsSanitizedRouteAndDeniedOutcome(t *testing.T) {
 	}
 }
 
+func TestSecurityAuditRecordsUnauthenticatedProtectedOperationAsAnonymous(t *testing.T) {
+	recorder := &securityAuditRecorderStub{}
+	router := chi.NewRouter()
+	router.Use(RequestID)
+	router.Use(SecurityAudit(recorder, nil))
+	router.Delete("/v1/shipments/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
+
+	shipmentID := uuid.New()
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/v1/shipments/"+shipmentID.String(), nil))
+
+	if recorder.calls != 1 {
+		t.Fatalf("監査記録回数が不正です: %d", recorder.calls)
+	}
+	if recorder.input.EventType != "shipment.delete" || recorder.input.Outcome != "denied" {
+		t.Fatalf("監査イベント分類が不正です: %#v", recorder.input)
+	}
+	if recorder.input.ActorType != "anonymous" || recorder.input.ActorUserID != nil {
+		t.Fatalf("未認証操作が匿名主体として記録されていません: %#v", recorder.input)
+	}
+	if recorder.input.ResourceID == nil || *recorder.input.ResourceID != shipmentID {
+		t.Fatalf("対象shipment IDが記録されていません: %#v", recorder.input)
+	}
+}
+
 func TestSecurityAuditUsesExplicitActorAndResourceAttributes(t *testing.T) {
 	recorder := &securityAuditRecorderStub{}
 	actorID := uuid.New()
