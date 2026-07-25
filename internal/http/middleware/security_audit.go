@@ -86,6 +86,9 @@ func SecurityAudit(recorder SecurityAuditRecorder, trustedProxyCIDRs []netip.Pre
 				id := *attributes.ActorUserID
 				actorUserID = &id
 			}
+			if actorType == "user" && actorUserID == nil {
+				actorType = "anonymous"
+			}
 
 			organizationID := attributes.OrganizationID
 			if organizationID == nil && spec.OrganizationID != "" {
