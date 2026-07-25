@@ -58,11 +58,6 @@ jobs:
           unformatted="$(find . -type f -name '*.go' -not -path './vendor/*' -print0 | xargs -0 gofmt -l)"
           printf '%s\n' "$unformatted" | tee .ci-logs/go/gofmt.log
           if [ -n "$unformatted" ]; then
-            while IFS= read -r file; do
-              target=".ci-logs/go/formatted/${file#./}"
-              mkdir -p "$(dirname "$target")"
-              gofmt "$file" > "$target"
-            done <<< "$unformatted"
             echo "次のGoファイルがgofmtされていません:"
             echo "$unformatted"
             exit 1
