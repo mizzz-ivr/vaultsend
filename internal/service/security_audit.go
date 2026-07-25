@@ -120,12 +120,12 @@ func (s *SecurityAuditService) Record(ctx context.Context, in SecurityAuditInput
 		ActorType:      normalized.ActorType,
 		ActorUserID:    normalized.ActorUserID,
 		OrganizationID: normalized.OrganizationID,
-		ResourceType:   optionalString(normalized.ResourceType),
+		ResourceType:   auditOptionalString(normalized.ResourceType),
 		ResourceID:     normalized.ResourceID,
-		RequestID:      optionalString(normalized.RequestID),
+		RequestID:      auditOptionalString(normalized.RequestID),
 		SourceService:  normalized.SourceService,
-		HTTPMethod:     optionalString(normalized.HTTPMethod),
-		RoutePattern:   optionalString(normalized.RoutePattern),
+		HTTPMethod:     auditOptionalString(normalized.HTTPMethod),
+		RoutePattern:   auditOptionalString(normalized.RoutePattern),
 		StatusCode:     optionalStatusCode(normalized.StatusCode),
 		ClientIPHMAC:   clientIPHMAC,
 		UserAgentHMAC:  userAgentHMAC,
@@ -413,7 +413,7 @@ func hmacSHA256Hex(secret, payload []byte) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func optionalString(value string) *string {
+func auditOptionalString(value string) *string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return nil
