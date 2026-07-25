@@ -144,8 +144,11 @@ func normalizedRateLimitEndpoint(method, path string) string {
 			if len(segments) == 3 {
 				return method + " /v1/orgs/{id}"
 			}
-			if len(segments) >= 4 {
-				return method + " /v1/orgs/{id}/" + strings.Join(segments[3:], "/")
+			if len(segments) == 4 {
+				return method + " /v1/orgs/{id}/" + segments[3]
+			}
+			if len(segments) >= 5 {
+				return method + " /v1/orgs/{id}/" + segments[3] + "/{resource_id}"
 			}
 		}
 	}
