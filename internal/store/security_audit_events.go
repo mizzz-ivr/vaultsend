@@ -10,50 +10,50 @@ import (
 )
 
 type SecurityAuditEvent struct {
-	ID               uuid.UUID
-	OccurredAt       time.Time
-	RecordedAt       time.Time
-	EventType        string
-	Severity         string
-	Outcome          string
-	ActorType        string
-	ActorUserID      *uuid.UUID
-	OrganizationID   *uuid.UUID
-	ResourceType     *string
-	ResourceID       *uuid.UUID
-	RequestID        *string
-	SourceService    string
-	HTTPMethod       *string
-	RoutePattern     *string
-	StatusCode       *int32
-	ClientIPHMAC     *string
-	UserAgentHMAC    *string
-	Details          json.RawMessage
-	IntegrityKeyID   string
-	IntegrityHMAC    string
+	ID             uuid.UUID
+	OccurredAt     time.Time
+	RecordedAt     time.Time
+	EventType      string
+	Severity       string
+	Outcome        string
+	ActorType      string
+	ActorUserID    *uuid.UUID
+	OrganizationID *uuid.UUID
+	ResourceType   *string
+	ResourceID     *uuid.UUID
+	RequestID      *string
+	SourceService  string
+	HTTPMethod     *string
+	RoutePattern   *string
+	StatusCode     *int32
+	ClientIPHMAC   *string
+	UserAgentHMAC  *string
+	Details        json.RawMessage
+	IntegrityKeyID string
+	IntegrityHMAC  string
 }
 
 type CreateSecurityAuditEventParams struct {
-	ID               uuid.UUID
-	OccurredAt       time.Time
-	EventType        string
-	Severity         string
-	Outcome          string
-	ActorType        string
-	ActorUserID      *uuid.UUID
-	OrganizationID   *uuid.UUID
-	ResourceType     *string
-	ResourceID       *uuid.UUID
-	RequestID        *string
-	SourceService    string
-	HTTPMethod       *string
-	RoutePattern     *string
-	StatusCode       *int32
-	ClientIPHMAC     *string
-	UserAgentHMAC    *string
-	Details          json.RawMessage
-	IntegrityKeyID   string
-	IntegrityHMAC    string
+	ID             uuid.UUID
+	OccurredAt     time.Time
+	EventType      string
+	Severity       string
+	Outcome        string
+	ActorType      string
+	ActorUserID    *uuid.UUID
+	OrganizationID *uuid.UUID
+	ResourceType   *string
+	ResourceID     *uuid.UUID
+	RequestID      *string
+	SourceService  string
+	HTTPMethod     *string
+	RoutePattern   *string
+	StatusCode     *int32
+	ClientIPHMAC   *string
+	UserAgentHMAC  *string
+	Details        json.RawMessage
+	IntegrityKeyID string
+	IntegrityHMAC  string
 }
 
 type securityAuditDBTX interface {
