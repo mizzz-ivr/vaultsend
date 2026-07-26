@@ -37,6 +37,8 @@ func (h OrgHandler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), out.ID)
+	middleware.SetSecurityAuditResource(r.Context(), "organization", out.ID)
 	render.JSON(w, http.StatusCreated, out)
 }
 
@@ -89,6 +91,9 @@ func (h OrgHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, "invalid_request", "不正なJSONです", chimw.GetReqID(r.Context()))
 		return
 	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), orgID)
+	middleware.SetSecurityAuditResource(r.Context(), "user", req.UserID)
+	middleware.SetSecurityAuditDetail(r.Context(), "role", req.Role)
 	out, err := h.Service.AddMember(r.Context(), user.ID, orgID, req.UserID, req.Role)
 	if err != nil {
 		writeServiceError(w, r, err)
@@ -113,6 +118,8 @@ func (h OrgHandler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		render.Error(w, http.StatusBadRequest, "invalid_user_id", "user id が不正です", chimw.GetReqID(r.Context()))
 		return
 	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), orgID)
+	middleware.SetSecurityAuditResource(r.Context(), "user", memberID)
 	if err := h.Service.RemoveMember(r.Context(), user.ID, orgID, memberID); err != nil {
 		writeServiceError(w, r, err)
 		return

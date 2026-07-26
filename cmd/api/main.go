@@ -26,6 +26,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	auditCfg, err := config.LoadSecurityAuditConfig(cfg.AppEnv)
+	if err != nil {
+		log.Fatalf("failed to load security audit config: %v", err)
+	}
 	if len(cfg.AccessGrantSecret) < 32 {
 		log.Fatal("ACCESS_GRANT_SECRET must be at least 32 bytes for the API process")
 	}
@@ -45,6 +49,11 @@ func main() {
 	}
 
 	queries := store.New(pool)
+	auditSvc := &service.SecurityAuditService{
+		Store:      queries,
+		HMACSecret: auditCfg.HMACSecret,
+		HMACKeyID:  auditCfg.HMACKeyID,
+	}
 	s3Store := storage.NewS3ObjectStore(s3.NewFromConfig(awsCfg))
 	uploadSvc := &service.UploadService{
 		Store:               queries,
@@ -85,7 +94,7 @@ func main() {
 		Guard:             guard,
 	}
 
-	handler := apphttp.NewServer(cfg, queries, uploadSvc, shipmentSvc, accessSvc, authSvc, billingSvc, orgSvc)
+	handler := apphttp.NewServer(cfg, queries, uploadSvc, shipmentSvc, accessSvc, authSvc, billingSvc, orgSvc, auditSvc)
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,

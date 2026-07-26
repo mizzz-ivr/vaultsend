@@ -55,6 +55,8 @@ func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
+	middleware.SetSecurityAuditActorUserID(r.Context(), out.User.ID)
+	middleware.SetSecurityAuditResource(r.Context(), "user", out.User.ID)
 	h.setSessionCookie(w, out.SessionToken, out.ExpiresAt)
 	render.JSON(w, http.StatusCreated, authResponse{User: out.User})
 }
@@ -79,6 +81,7 @@ func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, r, err)
 		return
 	}
+	middleware.SetSecurityAuditActorUserID(r.Context(), out.User.ID)
 	h.setSessionCookie(w, out.SessionToken, out.ExpiresAt)
 	render.JSON(w, http.StatusOK, authResponse{User: out.User})
 }

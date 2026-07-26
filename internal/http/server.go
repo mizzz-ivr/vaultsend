@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.UploadService, shipmentSvc *service.ShipmentService, accessSvc *service.AccessService, authSvc *service.AuthService, billingSvc *service.BillingService, orgSvc *service.OrgService) stdhttp.Handler {
+func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.UploadService, shipmentSvc *service.ShipmentService, accessSvc *service.AccessService, authSvc *service.AuthService, billingSvc *service.BillingService, orgSvc *service.OrgService, auditSvc *service.SecurityAuditService) stdhttp.Handler {
 	r := chi.NewRouter()
 	rateLimiter := appmw.NewInMemoryRateLimiter()
 
@@ -27,6 +27,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 	}))
 	r.Use(appmw.CSRFProtection(appmw.CSRFConfig{AllowedOrigins: cfg.CSRFAllowedOrigins}))
 	r.Use(appmw.OptionalAuth(authSvc))
+	r.Use(appmw.SecurityAudit(auditSvc, cfg.TrustedProxyCIDRs))
 	r.Use(appmw.OptionalPlan(billingSvc))
 
 	uploadHandler := handler.UploadHandler{Service: uploadSvc}
@@ -46,6 +47,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 	}
 	billingHandler := handler.BillingHandler{Service: billingSvc}
 	orgHandler := handler.OrgHandler{Service: orgSvc}
+	auditHandler := handler.SecurityAuditHandler{Service: auditSvc}
 
 	r.Get("/healthz", handler.Health)
 	r.Route("/v1", func(r chi.Router) {
@@ -82,6 +84,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 			r.Get("/orgs/{id}", orgHandler.GetOrg)
 			r.Post("/orgs/{id}/members", orgHandler.AddMember)
 			r.Delete("/orgs/{id}/members/{user_id}", orgHandler.DeleteMember)
+			r.Get("/orgs/{id}/security-audit-events", auditHandler.ListOrganizationEvents)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAuth(authSvc))
