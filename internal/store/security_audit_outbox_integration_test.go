@@ -139,6 +139,30 @@ func TestSecurityAuditOutboxAtomicityAndDelivery(t *testing.T) {
 		t.Fatalf("冪等配送後の監査件数が不正です: got=%d want=3", finalCount)
 	}
 
+	if _, err := pool.Exec(ctx, `UPDATE security_audit_outbox SET processed_at = NULL WHERE id = $1`, eventIDs[0]); err != nil {
+		t.Fatalf("復旧配送状態の準備に失敗しました: %v", err)
+	}
+	recovered, err := base.DeliverSecurityAuditOutboxBatch(ctx, 10)
+	if err != nil {
+		t.Fatalf("最終監査済みoutboxの復旧配送に失敗しました: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("復旧配送件数が不正です: got=%d want=1", recovered)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM security_audit_events WHERE id = ANY($1::uuid[])`, eventIDs).Scan(&finalCount); err != nil {
+		t.Fatalf("復旧配送後監査件数の取得に失敗しました: %v", err)
+	}
+	if finalCount != 3 {
+		t.Fatalf("復旧配送で監査イベントが重複しました: got=%d want=3", finalCount)
+	}
+	pending, err = base.CountPendingSecurityAuditOutbox(ctx)
+	if err != nil {
+		t.Fatalf("復旧配送後pending件数の取得に失敗しました: %v", err)
+	}
+	if pending != 0 {
+		t.Fatalf("復旧配送後もpending outboxが残っています: %d", pending)
+	}
+
 	_, _ = pool.Exec(ctx, `DELETE FROM security_audit_outbox WHERE id = ANY($1::uuid[])`, eventIDs)
 	_, _ = pool.Exec(ctx, `DELETE FROM upload_sessions WHERE id = $1`, uploadSession.ID)
 	_, _ = pool.Exec(ctx, `DELETE FROM shipments WHERE id = ANY($1::uuid[])`, []uuid.UUID{
