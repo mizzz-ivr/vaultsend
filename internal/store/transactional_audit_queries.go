@@ -49,7 +49,7 @@ FROM shipments WHERE id = $1 FOR UPDATE`
 
 	const updateShipment = `
 UPDATE shipments
-SET title=$2, message=$3, share_mode=$4, status=$5, expires_at=$6, max_downloads=$7, password_hash=$8, owner_user_id=COALESCE($9, owner_user_id), organization_id=COALESCE($10, organization_id), sent_at=CASE WHEN $5 = 'sent' THEN now() ELSE sent_at END
+SET title=$2, message=$3, share_mode=$4, status=$5::shipment_status, expires_at=$6, max_downloads=$7, password_hash=$8, owner_user_id=COALESCE($9, owner_user_id), organization_id=COALESCE($10, organization_id), sent_at=CASE WHEN $5::shipment_status = 'sent'::shipment_status THEN now() ELSE sent_at END
 WHERE id=$1
 RETURNING id, owner_type, owner_user_id, organization_id, status, share_mode, title, message, password_hash, max_downloads,
           current_downloads, expires_at, sent_at, revoked_at, deleted_at, created_at, updated_at`
