@@ -27,7 +27,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 	}))
 	r.Use(appmw.CSRFProtection(appmw.CSRFConfig{AllowedOrigins: cfg.CSRFAllowedOrigins}))
 	r.Use(appmw.OptionalAuth(authSvc))
-	r.Use(appmw.SecurityAudit(auditSvc, cfg.TrustedProxyCIDRs))
+	r.Use(appmw.SecurityAuditWithOutbox(auditSvc, cfg.TrustedProxyCIDRs))
 	r.Use(appmw.OptionalPlan(billingSvc))
 
 	uploadHandler := handler.UploadHandler{Service: uploadSvc}
