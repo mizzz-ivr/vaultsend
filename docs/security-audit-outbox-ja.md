@@ -56,6 +56,7 @@
 
 - outbox IDと最終監査イベントIDは同一UUIDです
 - `security_audit_events.id`の主キーと`ON CONFLICT (id) DO NOTHING`を使用します
+- `processed_at`は、今回INSERTしたイベントまたは同一IDの既存最終監査イベントを確認できた場合だけ更新します
 - 配送完了更新は監査イベントINSERTを含む同一SQL transaction内で実行します
 - worker再起動や複数起動時も同じイベントを重複記録しません
 - `FOR UPDATE SKIP LOCKED`により複数workerが同一outboxを同時処理しません
@@ -96,7 +97,38 @@ AUDIT_OUTBOX_CLEANUP_BATCH_SIZE=500
 
 `audit-worker`は監査HMAC秘密鍵を読み込みません。HMACはAPI内でoutbox登録前に生成済みであり、workerの責務は同一DB内の冪等配送だけです。
 
-## 8. 起動
+## 8. 本番DB権限分離
+
+現時点のローカル構成ではAPIとaudit-workerが同じ`DATABASE_URL`を利用できますが、本番ではDB roleを分離します。
+
+### API runtime role
+
+最低限、以下だけを許可します。
+
+- 業務テーブルに対する既存の必要権限
+- `security_audit_outbox`への`INSERT`
+- `security_audit_events`への直接`INSERT`（失敗・拒否・outbox未対応イベント用）
+
+原則として`security_audit_outbox`の`UPDATE`・`DELETE`は許可しません。
+
+### audit-worker role
+
+最低限、以下だけを許可します。
+
+- `security_audit_outbox`の`SELECT`・`UPDATE`・処理済み行の`DELETE`
+- `security_audit_events`への`INSERT`
+
+業務テーブルの更新権限は付与しません。
+
+### migration role
+
+- DDL実行権限を持つ専用roleとします
+- API・audit-workerのruntime roleと共有しません
+- role作成・GRANT・secret分離はデプロイ/IaCの後続タスクです
+
+この分離を行わない場合、APIプロセスの侵害時に未配送outboxを削除・改変できる余地が残るため、本番運用開始前の必須条件とします。
+
+## 9. 起動
 
 ```bash
 make run-audit-worker
@@ -104,7 +136,7 @@ make run-audit-worker
 
 本番ではAPIとは別プロセス・別コンテナとして常時1台以上起動します。複数起動は可能ですが、最初は運用の単純さを優先して1台を推奨します。
 
-## 9. 監視
+## 10. 監視
 
 最低限、以下を監視します。
 
@@ -121,13 +153,13 @@ make run-audit-worker
 - worker errorが5分間に3回以上
 - APIは稼働中だがworkerログが10分以上ない
 
-## 10. 保持期間
+## 11. 保持期間
 
 処理済みoutboxは既定7日で削除します。
 
 削除対象は配送用一時データのみです。追記専用`security_audit_events`のretentionには影響しません。
 
-## 11. テスト観点
+## 12. テスト観点
 
 ### 正常系
 
@@ -149,15 +181,16 @@ make run-audit-worker
 - 認証・認可失敗の直接監査
 - shipment送信・受信E2E
 - migration up/down/up
-- API、mail-worker、cleanup-workerのbuild
+- API、mail-worker、cleanup-worker、audit-workerのcompile
 
-## 12. 後続タスク
+## 13. 後続タスク
 
-1. organization member変更とStripe seat同期の整合性設計
-2. access verify/download成功処理のtransaction統合
-3. billing webhook用outbox
-4. mail-worker/cleanup-workerの監査イベント化
-5. pending件数・最古時刻のmetrics公開
-6. audit-workerのデプロイ/IaC追加
-7. dead-letter状態と管理者向け再配送操作
-8. 外部SIEM・WORMストレージへの配送
+1. API・audit-worker・migration用DB roleとsecretのIaC分離
+2. organization member変更とStripe seat同期の整合性設計
+3. access verify/download成功処理のtransaction統合
+4. billing webhook用outbox
+5. mail-worker/cleanup-workerの監査イベント化
+6. pending件数・最古時刻のmetrics公開
+7. audit-workerのデプロイ/IaC追加
+8. dead-letter状態と管理者向け再配送操作
+9. 外部SIEM・WORMストレージへの配送
