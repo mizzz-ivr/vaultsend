@@ -84,7 +84,10 @@ WITH claimed AS MATERIALIZED (
     FROM claimed
     WHERE outbox.id = claimed.id
       AND outbox.processed_at IS NULL
-      AND (SELECT COUNT(*) FROM inserted) >= 0
+      AND (
+          EXISTS (SELECT 1 FROM inserted WHERE inserted.id = claimed.id)
+          OR EXISTS (SELECT 1 FROM security_audit_events AS event WHERE event.id = claimed.id)
+      )
     RETURNING outbox.id
 )
 SELECT COUNT(*) FROM marked`
