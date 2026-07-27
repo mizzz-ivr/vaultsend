@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
@@ -51,5 +50,3 @@ func LoadSecurityAuditOutboxConfig() (SecurityAuditOutboxConfig, error) {
 	cfg.CleanupBatchSize = int32(cleanupBatchSize)
 	return cfg, nil
 }
-
-var _ = os.Getenv
