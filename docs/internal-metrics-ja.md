@@ -47,7 +47,11 @@ export INTERNAL_METRICS_QUERY_TIMEOUT_SEC=3
 - `1`: 成功
 - `0`: DBエラー、タイムアウト、Store未設定
 
-クエリ失敗時はHTTP 503を返し、pending件数を0として出力しません。監視不能状態を「滞留なし」と誤認しないためです。
+DB集約に失敗した場合もHTTP 200で`scrape_success 0`だけを返します。Prometheusは2xx以外のレスポンス本文を取り込まないため、HTTP 503にすると独自Metricによる原因判別ができないためです。
+
+この場合、pending件数や最古時刻は出力しません。監視不能状態を「滞留なし」と誤認しないためです。
+
+通信断、API停止、Bearer認証失敗など、Metrics本文自体を正常に取得できない状態はPrometheus標準の`up` Metricで判定します。
 
 ### `vaultsend_audit_outbox_pending`
 
@@ -69,6 +73,8 @@ export INTERNAL_METRICS_QUERY_TIMEOUT_SEC=3
 
 ## 5. レスポンス例
 
+正常時:
+
 ```text
 # HELP vaultsend_audit_outbox_scrape_success Whether the audit outbox metrics query succeeded.
 # TYPE vaultsend_audit_outbox_scrape_success gauge
@@ -82,6 +88,14 @@ vaultsend_audit_outbox_oldest_pending_age_seconds 42.5
 # HELP vaultsend_audit_outbox_oldest_pending_created_timestamp_seconds Unix timestamp of the oldest unprocessed security audit outbox event. Zero when no event is pending.
 # TYPE vaultsend_audit_outbox_oldest_pending_created_timestamp_seconds gauge
 vaultsend_audit_outbox_oldest_pending_created_timestamp_seconds 1.7851234e+09
+```
+
+DB集約失敗時:
+
+```text
+# HELP vaultsend_audit_outbox_scrape_success Whether the audit outbox metrics query succeeded.
+# TYPE vaultsend_audit_outbox_scrape_success gauge
+vaultsend_audit_outbox_scrape_success 0
 ```
 
 ## 6. ローカル確認
@@ -126,21 +140,29 @@ scrape_configs:
 
 ## 8. 推奨アラート
 
-### Metrics取得失敗
+### Metrics経路・認証・API障害
+
+```promql
+up{job="vaultsend-api"} == 0
+```
+
+API停止、ネットワーク断、TLSエラー、Bearer token不一致、非2xxレスポンス等を検知します。
+
+### DB集約クエリ失敗
 
 ```promql
 vaultsend_audit_outbox_scrape_success == 0
 ```
 
-1分以上継続した場合に警告します。
+APIへのスクレイプ自体は成功しているものの、PostgreSQL集約クエリが失敗またはタイムアウトした状態です。1分以上継続した場合に警告します。
 
-### Metrics自体が消失
+### Metrics系列自体が消失
 
 ```promql
 absent(vaultsend_audit_outbox_scrape_success)
 ```
 
-API停止、監視経路断、認証設定不整合を検知します。
+設定変更やラベル不整合によって独自Metric系列が消失した場合の補助検知に使用します。通常の接続障害は`up == 0`を優先します。
 
 ### 最古未処理が5分超過
 
@@ -162,19 +184,20 @@ vaultsend_audit_outbox_pending > 1000
 
 ## 9. 障害時の確認順序
 
-1. `vaultsend_audit_outbox_scrape_success`が1か確認する
-2. APIとPostgreSQL間の接続状態を確認する
-3. audit-workerプロセスの死活を確認する
-4. `event=security_audit_outbox_run_failed`ログを確認する
-5. audit-worker用DB roleの権限を確認する
-6. pending件数と最古作成時刻を確認する
-7. 原因解消後、pendingが減少し0へ戻ることを確認する
+1. Prometheus標準の`up{job="vaultsend-api"}`が1か確認する
+2. `vaultsend_audit_outbox_scrape_success`が1か確認する
+3. APIとPostgreSQL間の接続状態を確認する
+4. audit-workerプロセスの死活を確認する
+5. `event=security_audit_outbox_run_failed`ログを確認する
+6. audit-worker用DB roleの権限を確認する
+7. pending件数と最古作成時刻を確認する
+8. 原因解消後、pendingが減少し0へ戻ることを確認する
 
 Outbox行を手動削除してアラートだけを解消してはいけません。最終監査テーブルへの配送確認なしに削除すると監査証跡が欠落します。
 
 ## 10. セキュリティ
 
-- トークン比較は定数時間比較を使用します
+- トークンはSHA-256で固定長化した後、定数時間比較します
 - 認証前にDBへアクセスしません
 - レスポンスには件数と時刻だけを含め、shipment ID、organization ID、actor情報を含めません
 - `Cache-Control: no-store`を設定します
@@ -189,8 +212,8 @@ Outbox行を手動削除してアラートだけを解消してはいけませ�
 - token欠落・不一致・不正形式は401
 - 認証失敗時はStoreを呼ばない
 - 正常時はPrometheus形式を返す
-- DB失敗時は503と`scrape_success 0`
-- Query timeout時は503
+- DB失敗時はHTTP 200で`scrape_success 0`だけを返す
+- Query timeout時はHTTP 200で`scrape_success 0`だけを返す
 - configで32文字未満・空白入りtokenを拒否
 
 ### PostgreSQL integration test
