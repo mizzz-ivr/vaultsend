@@ -1,0 +1,25 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: vaultsend-operations
+  group_by:
+    - alertname
+    - environment
+    - service
+    - component
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - receiver: vaultsend-operations
+      matchers:
+        - severity="critical"
+      repeat_interval: 1h
+
+receivers:
+  - name: vaultsend-operations
+    webhook_configs:
+      - url_file: /run/secrets/alertmanager_webhook_url
+        send_resolved: true
+        max_alerts: 50
