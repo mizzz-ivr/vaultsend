@@ -1,0 +1,74 @@
+name: Operations
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/config/**
+      - deploy/**
+      - scripts/verify-operations-config.sh
+      - .github/workflows/operations.yml
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/config/**
+      - deploy/**
+      - scripts/verify-operations-config.sh
+      - .github/workflows/operations.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operations-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Container・Compose・Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: 診断ログディレクトリを作成
+        run: mkdir -p .ci-logs/operations
+
+      - name: DockerとComposeのバージョンを記録
+        shell: bash
+        run: |
+          {
+            docker version
+            docker compose version
+            jq --version
+          } 2>&1 | tee .ci-logs/operations/tool-versions.log
+
+      - name: コンテナと監視設定を検証
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/verify-operations-config.sh 2>&1 | tee .ci-logs/operations/verify.log
+
+      - name: 運用設定の失敗ログを保存
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: operations-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ci-logs/operations
+          if-no-files-found: ignore
+          retention-days: 7
