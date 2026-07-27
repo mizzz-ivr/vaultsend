@@ -122,7 +122,7 @@ func TestInternalMetricsHandlerReturnsPrometheusMetrics(t *testing.T) {
 	}
 }
 
-func TestInternalMetricsHandlerReturnsServiceUnavailableOnStoreFailure(t *testing.T) {
+func TestInternalMetricsHandlerReturnsScrapeFailureMetricOnStoreFailure(t *testing.T) {
 	storeStub := &internalMetricsStoreStub{err: errors.New("database unavailable")}
 	handler := InternalMetricsHandler{Store: storeStub, BearerToken: "valid-token"}
 	req := httptest.NewRequest(http.MethodGet, "/internal/metrics", nil)
@@ -131,8 +131,8 @@ func TestInternalMetricsHandlerReturnsServiceUnavailableOnStoreFailure(t *testin
 
 	handler.ServeHTTP(res, req)
 
-	if res.Code != http.StatusServiceUnavailable {
-		t.Fatalf("unexpected status: got=%d want=%d", res.Code, http.StatusServiceUnavailable)
+	if res.Code != http.StatusOK {
+		t.Fatalf("unexpected status: got=%d want=%d", res.Code, http.StatusOK)
 	}
 	body := res.Body.String()
 	if !strings.Contains(body, "vaultsend_audit_outbox_scrape_success 0") {
@@ -156,8 +156,11 @@ func TestInternalMetricsHandlerAppliesQueryTimeout(t *testing.T) {
 
 	handler.ServeHTTP(res, req)
 
-	if res.Code != http.StatusServiceUnavailable {
-		t.Fatalf("unexpected status: got=%d want=%d", res.Code, http.StatusServiceUnavailable)
+	if res.Code != http.StatusOK {
+		t.Fatalf("unexpected status: got=%d want=%d", res.Code, http.StatusOK)
+	}
+	if !strings.Contains(res.Body.String(), "vaultsend_audit_outbox_scrape_success 0") {
+		t.Fatalf("query timeout must be exposed as scrape failure: %s", res.Body.String())
 	}
 	if storeStub.called != 1 {
 		t.Fatalf("unexpected store call count: %d", storeStub.called)
