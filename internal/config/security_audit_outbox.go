@@ -16,18 +16,21 @@ type SecurityAuditOutboxConfig struct {
 }
 
 func LoadSecurityAuditOutboxConfig() (SecurityAuditOutboxConfig, error) {
+	databaseURL, err := secretEnvOrFile("DATABASE_URL", "DATABASE_URL_FILE")
+	if err != nil {
+		return SecurityAuditOutboxConfig{}, err
+	}
 	cfg := SecurityAuditOutboxConfig{
-		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		DatabaseURL:      strings.TrimSpace(databaseURL),
 		PollInterval:     2 * time.Second,
 		BatchSize:        100,
 		Retention:        7 * 24 * time.Hour,
 		CleanupBatchSize: 500,
 	}
 	if cfg.DatabaseURL == "" {
-		return SecurityAuditOutboxConfig{}, fmt.Errorf("DATABASE_URL is required")
+		return SecurityAuditOutboxConfig{}, fmt.Errorf("DATABASE_URL or DATABASE_URL_FILE is required")
 	}
 
-	var err error
 	if cfg.PollInterval, err = positiveDurationSecondsEnv("AUDIT_OUTBOX_POLL_INTERVAL_SEC", cfg.PollInterval); err != nil {
 		return SecurityAuditOutboxConfig{}, err
 	}
@@ -48,3 +51,5 @@ func LoadSecurityAuditOutboxConfig() (SecurityAuditOutboxConfig, error) {
 	cfg.CleanupBatchSize = int32(cleanupBatchSize)
 	return cfg, nil
 }
+
+var _ = os.Getenv
