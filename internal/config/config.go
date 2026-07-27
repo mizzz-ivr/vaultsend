@@ -26,17 +26,19 @@ type Config struct {
 	StripeWebhookSecret string
 	StripePriceIDPro    string
 	AccessGrantSecret   string
+	InternalMetricsToken string
 
 	// HTTPサーバー・middleware関連。
-	HTTPRequestTimeout    time.Duration
-	HTTPReadHeaderTimeout time.Duration
-	HTTPReadTimeout       time.Duration
-	HTTPWriteTimeout      time.Duration
-	HTTPIdleTimeout       time.Duration
-	HTTPMaxHeaderBytes    int
-	HSTSEnabled           bool
-	TrustedProxyCIDRs     []netip.Prefix
-	CSRFAllowedOrigins    []string
+	HTTPRequestTimeout          time.Duration
+	HTTPReadHeaderTimeout       time.Duration
+	HTTPReadTimeout             time.Duration
+	HTTPWriteTimeout            time.Duration
+	HTTPIdleTimeout             time.Duration
+	InternalMetricsQueryTimeout time.Duration
+	HTTPMaxHeaderBytes          int
+	HSTSEnabled                 bool
+	TrustedProxyCIDRs           []netip.Prefix
+	CSRFAllowedOrigins          []string
 
 	UploadURLTTL      time.Duration
 	PresignedURLTTL   time.Duration
@@ -61,41 +63,43 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:                getEnv("APP_ENV", "local"),
-		Port:                  getEnv("PORT", "8080"),
-		DatabaseURL:           os.Getenv("DATABASE_URL"),
-		AWSRegion:             os.Getenv("AWS_REGION"),
-		S3Bucket:              os.Getenv("S3_BUCKET"),
-		SQSQueueURL:           os.Getenv("SQS_QUEUE_URL"),
-		SESFromEmail:          os.Getenv("SES_FROM_EMAIL"),
-		FrontendURL:           strings.TrimSpace(os.Getenv("FRONTEND_URL")),
-		StripeSecretKey:       os.Getenv("STRIPE_SECRET_KEY"),
-		StripeWebhookSecret:   os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		StripePriceIDPro:      os.Getenv("STRIPE_PRICE_ID_PRO"),
-		AccessGrantSecret:     strings.TrimSpace(os.Getenv("ACCESS_GRANT_SECRET")),
-		HTTPRequestTimeout:    30 * time.Second,
-		HTTPReadHeaderTimeout: 5 * time.Second,
-		HTTPReadTimeout:       15 * time.Second,
-		HTTPWriteTimeout:      35 * time.Second,
-		HTTPIdleTimeout:       60 * time.Second,
-		HTTPMaxHeaderBytes:    32 * 1024,
-		HSTSEnabled:           true,
-		UploadURLTTL:          15 * time.Minute,
-		PresignedURLTTL:       60 * time.Second,
-		AccessGrantTTL:        10 * time.Minute,
-		UploadPartSize:        8 * 1024 * 1024,
-		UploadMaxFileSize:     10 * 1024 * 1024 * 1024,
-		UploadMaxParts:        1000,
-		RateLimitRPS:          100,
-		VerifyMaxAttempts:     5,
-		DownloadRateLimit:     10,
-		CleanupInterval:       3 * time.Minute,
-		CleanupBatchSize:      100,
-		DeletionGracePeriod:   24 * time.Hour,
-		SessionTTLHours:       24 * 7,
-		CookieDomain:          strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
-		CookieSecure:          true,
-		CookieSameSite:        http.SameSiteLaxMode,
+		AppEnv:                     getEnv("APP_ENV", "local"),
+		Port:                       getEnv("PORT", "8080"),
+		DatabaseURL:                os.Getenv("DATABASE_URL"),
+		AWSRegion:                  os.Getenv("AWS_REGION"),
+		S3Bucket:                   os.Getenv("S3_BUCKET"),
+		SQSQueueURL:                os.Getenv("SQS_QUEUE_URL"),
+		SESFromEmail:               os.Getenv("SES_FROM_EMAIL"),
+		FrontendURL:                strings.TrimSpace(os.Getenv("FRONTEND_URL")),
+		StripeSecretKey:            os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret:        os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripePriceIDPro:           os.Getenv("STRIPE_PRICE_ID_PRO"),
+		AccessGrantSecret:          strings.TrimSpace(os.Getenv("ACCESS_GRANT_SECRET")),
+		InternalMetricsToken:       strings.TrimSpace(os.Getenv("INTERNAL_METRICS_TOKEN")),
+		HTTPRequestTimeout:         30 * time.Second,
+		HTTPReadHeaderTimeout:      5 * time.Second,
+		HTTPReadTimeout:            15 * time.Second,
+		HTTPWriteTimeout:           35 * time.Second,
+		HTTPIdleTimeout:            60 * time.Second,
+		InternalMetricsQueryTimeout: 3 * time.Second,
+		HTTPMaxHeaderBytes:         32 * 1024,
+		HSTSEnabled:                true,
+		UploadURLTTL:               15 * time.Minute,
+		PresignedURLTTL:            60 * time.Second,
+		AccessGrantTTL:             10 * time.Minute,
+		UploadPartSize:             8 * 1024 * 1024,
+		UploadMaxFileSize:          10 * 1024 * 1024 * 1024,
+		UploadMaxParts:             1000,
+		RateLimitRPS:               100,
+		VerifyMaxAttempts:          5,
+		DownloadRateLimit:          10,
+		CleanupInterval:            3 * time.Minute,
+		CleanupBatchSize:           100,
+		DeletionGracePeriod:        24 * time.Hour,
+		SessionTTLHours:            24 * 7,
+		CookieDomain:               strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
+		CookieSecure:               true,
+		CookieSameSite:             http.SameSiteLaxMode,
 	}
 
 	if cfg.AppEnv == "local" || cfg.AppEnv == "test" {
@@ -163,6 +167,9 @@ func Load() (Config, error) {
 	if cfg.HTTPIdleTimeout, err = positiveDurationSecondsEnv("HTTP_IDLE_TIMEOUT_SEC", cfg.HTTPIdleTimeout); err != nil {
 		return Config{}, err
 	}
+	if cfg.InternalMetricsQueryTimeout, err = positiveDurationSecondsEnv("INTERNAL_METRICS_QUERY_TIMEOUT_SEC", cfg.InternalMetricsQueryTimeout); err != nil {
+		return Config{}, err
+	}
 	if cfg.HTTPMaxHeaderBytes, err = positiveIntEnv("HTTP_MAX_HEADER_BYTES", cfg.HTTPMaxHeaderBytes); err != nil {
 		return Config{}, err
 	}
@@ -197,6 +204,15 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.DeletionGracePeriod = time.Duration(deletionGraceHours) * time.Hour
+
+	if cfg.InternalMetricsToken != "" {
+		if len(cfg.InternalMetricsToken) < 32 {
+			return Config{}, fmt.Errorf("INTERNAL_METRICS_TOKEN must be at least 32 bytes when configured")
+		}
+		if strings.ContainsAny(cfg.InternalMetricsToken, " \t\r\n") {
+			return Config{}, fmt.Errorf("INTERNAL_METRICS_TOKEN must not contain whitespace")
+		}
+	}
 
 	missing := make([]string, 0)
 	if cfg.DatabaseURL == "" {
