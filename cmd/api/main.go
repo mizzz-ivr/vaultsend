@@ -48,7 +48,8 @@ func main() {
 		log.Fatalf("failed to load aws config: %v", err)
 	}
 
-	queries := store.New(pool)
+	baseQueries := store.New(pool)
+	queries := store.NewTransactionalAuditQueries(baseQueries)
 	auditSvc := &service.SecurityAuditService{
 		Store:      queries,
 		HMACSecret: auditCfg.HMACSecret,
@@ -94,7 +95,7 @@ func main() {
 		Guard:             guard,
 	}
 
-	handler := apphttp.NewServer(cfg, queries, uploadSvc, shipmentSvc, accessSvc, authSvc, billingSvc, orgSvc, auditSvc)
+	handler := apphttp.NewServer(cfg, baseQueries, uploadSvc, shipmentSvc, accessSvc, authSvc, billingSvc, orgSvc, auditSvc)
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,
