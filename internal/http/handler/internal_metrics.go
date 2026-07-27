@@ -86,7 +86,9 @@ func handleInternalMetricsFailure(w http.ResponseWriter, r *http.Request, err er
 		chimw.GetReqID(r.Context()),
 		err.Error(),
 	)
-	w.WriteHeader(http.StatusServiceUnavailable)
+	// Prometheusは2xx以外のレスポンス本文を取り込まないため、
+	// collector自体の失敗はGaugeで返し、通信・認証障害とは区別する。
+	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprint(w, `# HELP vaultsend_audit_outbox_scrape_success Whether the audit outbox metrics query succeeded.
 # TYPE vaultsend_audit_outbox_scrape_success gauge
 vaultsend_audit_outbox_scrape_success 0
