@@ -14,18 +14,18 @@ import (
 // Config はアプリケーション全体で利用する設定値を保持する。
 // 環境変数ベースで管理し、Secret値は実行環境のSecret Manager等から注入する。
 type Config struct {
-	AppEnv              string
-	Port                string
-	DatabaseURL         string
-	AWSRegion           string
-	S3Bucket            string
-	SQSQueueURL         string
-	SESFromEmail        string
-	FrontendURL         string
-	StripeSecretKey     string
-	StripeWebhookSecret string
-	StripePriceIDPro    string
-	AccessGrantSecret   string
+	AppEnv               string
+	Port                 string
+	DatabaseURL          string
+	AWSRegion            string
+	S3Bucket             string
+	SQSQueueURL          string
+	SESFromEmail         string
+	FrontendURL          string
+	StripeSecretKey      string
+	StripeWebhookSecret  string
+	StripePriceIDPro     string
+	AccessGrantSecret    string
 	InternalMetricsToken string
 
 	// HTTPサーバー・middleware関連。
@@ -63,43 +63,43 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:                     getEnv("APP_ENV", "local"),
-		Port:                       getEnv("PORT", "8080"),
-		DatabaseURL:                os.Getenv("DATABASE_URL"),
-		AWSRegion:                  os.Getenv("AWS_REGION"),
-		S3Bucket:                   os.Getenv("S3_BUCKET"),
-		SQSQueueURL:                os.Getenv("SQS_QUEUE_URL"),
-		SESFromEmail:               os.Getenv("SES_FROM_EMAIL"),
-		FrontendURL:                strings.TrimSpace(os.Getenv("FRONTEND_URL")),
-		StripeSecretKey:            os.Getenv("STRIPE_SECRET_KEY"),
-		StripeWebhookSecret:        os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		StripePriceIDPro:           os.Getenv("STRIPE_PRICE_ID_PRO"),
-		AccessGrantSecret:          strings.TrimSpace(os.Getenv("ACCESS_GRANT_SECRET")),
-		InternalMetricsToken:       strings.TrimSpace(os.Getenv("INTERNAL_METRICS_TOKEN")),
-		HTTPRequestTimeout:         30 * time.Second,
-		HTTPReadHeaderTimeout:      5 * time.Second,
-		HTTPReadTimeout:            15 * time.Second,
-		HTTPWriteTimeout:           35 * time.Second,
-		HTTPIdleTimeout:            60 * time.Second,
+		AppEnv:                      getEnv("APP_ENV", "local"),
+		Port:                        getEnv("PORT", "8080"),
+		DatabaseURL:                 os.Getenv("DATABASE_URL"),
+		AWSRegion:                   os.Getenv("AWS_REGION"),
+		S3Bucket:                    os.Getenv("S3_BUCKET"),
+		SQSQueueURL:                 os.Getenv("SQS_QUEUE_URL"),
+		SESFromEmail:                os.Getenv("SES_FROM_EMAIL"),
+		FrontendURL:                 strings.TrimSpace(os.Getenv("FRONTEND_URL")),
+		StripeSecretKey:             os.Getenv("STRIPE_SECRET_KEY"),
+		StripeWebhookSecret:         os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		StripePriceIDPro:            os.Getenv("STRIPE_PRICE_ID_PRO"),
+		AccessGrantSecret:           strings.TrimSpace(os.Getenv("ACCESS_GRANT_SECRET")),
+		InternalMetricsToken:        strings.TrimSpace(os.Getenv("INTERNAL_METRICS_TOKEN")),
+		HTTPRequestTimeout:          30 * time.Second,
+		HTTPReadHeaderTimeout:       5 * time.Second,
+		HTTPReadTimeout:             15 * time.Second,
+		HTTPWriteTimeout:            35 * time.Second,
+		HTTPIdleTimeout:             60 * time.Second,
 		InternalMetricsQueryTimeout: 3 * time.Second,
-		HTTPMaxHeaderBytes:         32 * 1024,
-		HSTSEnabled:                true,
-		UploadURLTTL:               15 * time.Minute,
-		PresignedURLTTL:            60 * time.Second,
-		AccessGrantTTL:             10 * time.Minute,
-		UploadPartSize:             8 * 1024 * 1024,
-		UploadMaxFileSize:          10 * 1024 * 1024 * 1024,
-		UploadMaxParts:             1000,
-		RateLimitRPS:               100,
-		VerifyMaxAttempts:          5,
-		DownloadRateLimit:          10,
-		CleanupInterval:            3 * time.Minute,
-		CleanupBatchSize:           100,
-		DeletionGracePeriod:        24 * time.Hour,
-		SessionTTLHours:            24 * 7,
-		CookieDomain:               strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
-		CookieSecure:               true,
-		CookieSameSite:             http.SameSiteLaxMode,
+		HTTPMaxHeaderBytes:          32 * 1024,
+		HSTSEnabled:                 true,
+		UploadURLTTL:                15 * time.Minute,
+		PresignedURLTTL:             60 * time.Second,
+		AccessGrantTTL:              10 * time.Minute,
+		UploadPartSize:              8 * 1024 * 1024,
+		UploadMaxFileSize:           10 * 1024 * 1024 * 1024,
+		UploadMaxParts:              1000,
+		RateLimitRPS:                100,
+		VerifyMaxAttempts:           5,
+		DownloadRateLimit:           10,
+		CleanupInterval:             3 * time.Minute,
+		CleanupBatchSize:            100,
+		DeletionGracePeriod:         24 * time.Hour,
+		SessionTTLHours:             24 * 7,
+		CookieDomain:                strings.TrimSpace(os.Getenv("COOKIE_DOMAIN")),
+		CookieSecure:                true,
+		CookieSameSite:              http.SameSiteLaxMode,
 	}
 
 	if cfg.AppEnv == "local" || cfg.AppEnv == "test" {
