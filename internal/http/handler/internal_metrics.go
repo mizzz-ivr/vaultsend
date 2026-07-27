@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -102,5 +103,7 @@ func validInternalMetricsBearer(headerValue, expectedToken string) bool {
 	if provided == "" || strings.ContainsAny(provided, " \t\r\n") {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+	providedHash := sha256.Sum256([]byte(provided))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) == 1
 }
