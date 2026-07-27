@@ -48,8 +48,14 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 	billingHandler := handler.BillingHandler{Service: billingSvc}
 	orgHandler := handler.OrgHandler{Service: orgSvc}
 	auditHandler := handler.SecurityAuditHandler{Service: auditSvc}
+	internalMetricsHandler := handler.InternalMetricsHandler{
+		Store:        queries,
+		BearerToken:  cfg.InternalMetricsToken,
+		QueryTimeout: cfg.InternalMetricsQueryTimeout,
+	}
 
 	r.Get("/healthz", handler.Health)
+	r.Get("/internal/metrics", internalMetricsHandler.ServeHTTP)
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/uploads", uploadHandler.CreateUpload)
 		r.Post("/uploads/{id}/complete", uploadHandler.CompleteUpload)
@@ -97,6 +103,5 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 		r.Post("/billing/webhook", billingHandler.Webhook)
 	})
 
-	_ = queries
 	return r
 }
