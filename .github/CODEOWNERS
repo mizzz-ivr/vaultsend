@@ -1,0 +1,8 @@
+# セキュリティ境界・ビルド・公開経路は所有者レビュー対象とする。
+/.github/workflows/ @mizzz-ivr
+/.github/dependabot.yml @mizzz-ivr
+/Dockerfile @mizzz-ivr
+/.dockerignore @mizzz-ivr
+/scripts/verify-supply-chain.sh @mizzz-ivr
+/docs/software-supply-chain-security-ja.md @mizzz-ivr
+/deploy/ @mizzz-ivr
