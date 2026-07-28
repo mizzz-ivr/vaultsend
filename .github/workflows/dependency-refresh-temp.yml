@@ -1,9 +1,9 @@
 name: Supply Chain Dependency Refresh Temporary
 
 on:
-  push:
+  pull_request:
     branches:
-      - security/software-supply-chain
+      - main
     paths:
       - .github/dependency-refresh.trigger
 
@@ -13,6 +13,9 @@ permissions:
 jobs:
   refresh:
     name: 依存関係・digest・Action SHAを更新
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'security/software-supply-chain'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -94,7 +97,7 @@ jobs:
 
           sed -i "s|^FROM golang:.* AS builder$|FROM golang:1.25.12-bookworm@${go_builder#golang@} AS builder|" Dockerfile
           sed -i "s|^FROM gcr.io/distroless/static-debian12:nonroot.* AS runtime$|FROM gcr.io/distroless/static-debian12:nonroot@${runtime_image#gcr.io/distroless/static-debian12@} AS runtime|" Dockerfile
-          sed -i "s|TRIVY_IMAGE=\"${TRIVY_IMAGE:-aquasec/trivy:0.70.0}\"|TRIVY_IMAGE=\"${TRIVY_IMAGE:-aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}}\"|" scripts/verify-supply-chain.sh
+          sed -i "s|TRIVY_IMAGE=\"aquasec/trivy:0.70.0\"|TRIVY_IMAGE=\"aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}\"|" scripts/verify-supply-chain.sh
           sed -i "s|^  TRIVY_IMAGE: aquasec/trivy:0.70.0$|  TRIVY_IMAGE: aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}|" .github/workflows/supply-chain.yml
 
           printf '%s\n%s\n%s\n' "${go_builder}" "${runtime_image}" "${trivy_image}" | tee /tmp/image-digests.txt
@@ -103,10 +106,21 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          checkout_sha="$(git ls-remote https://github.com/actions/checkout.git refs/tags/v7.0.0^{} | awk '{print $1}')"
-          upload_sha="$(git ls-remote https://github.com/actions/upload-artifact.git refs/tags/v7.0.0^{} | awk '{print $1}')"
-          attest_sha="$(git ls-remote https://github.com/actions/attest.git refs/tags/v4.1.0^{} | awk '{print $1}')"
-          cosign_sha="$(git ls-remote https://github.com/sigstore/cosign-installer.git refs/tags/v4.1.2^{} | awk '{print $1}')"
+          resolve_tag() {
+            local repository="$1"
+            local tag="$2"
+            local sha
+            sha="$(git ls-remote "${repository}" "refs/tags/${tag}^{}" | awk 'NR == 1 {print $1}')"
+            if [[ -z "${sha}" ]]; then
+              sha="$(git ls-remote "${repository}" "refs/tags/${tag}" | awk 'NR == 1 {print $1}')"
+            fi
+            printf '%s' "${sha}"
+          }
+
+          checkout_sha="$(resolve_tag https://github.com/actions/checkout.git v7.0.0)"
+          upload_sha="$(resolve_tag https://github.com/actions/upload-artifact.git v7.0.0)"
+          attest_sha="$(resolve_tag https://github.com/actions/attest.git v4.1.0)"
+          cosign_sha="$(resolve_tag https://github.com/sigstore/cosign-installer.git v4.1.2)"
 
           for sha in "${checkout_sha}" "${upload_sha}" "${attest_sha}" "${cosign_sha}"; do
             [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
