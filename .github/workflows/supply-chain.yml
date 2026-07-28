@@ -7,6 +7,7 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - .gitignore
       - go.mod
       - go.sum
       - cmd/**
@@ -24,6 +25,7 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - .gitignore
       - go.mod
       - go.sum
       - cmd/**
