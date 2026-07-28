@@ -1,0 +1,135 @@
+name: Supply Chain Dependency Refresh Temporary
+
+on:
+  push:
+    branches:
+      - security/software-supply-chain
+    paths:
+      - .github/dependency-refresh.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: 依存関係・digest・Action SHAを更新
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 対象ブランチを取得
+        uses: actions/checkout@v7.0.0
+        with:
+          ref: security/software-supply-chain
+          fetch-depth: 0
+
+      - name: Go 1.25.12をセットアップ
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.12
+          cache: true
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.19.0
+
+      - name: Go依存関係を修正版へ更新
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          go mod edit -go=1.25.0 -toolchain=go1.25.12
+          go get github.com/jackc/pgx/v5@latest golang.org/x/crypto@latest
+          go mod tidy
+          go mod verify
+          go list -m github.com/jackc/pgx/v5 golang.org/x/crypto
+
+      - name: Web依存関係を修正版へ更新
+        shell: bash
+        working-directory: web
+        run: |
+          set -Eeuo pipefail
+          postcss_version="$(npm view postcss version)"
+          sharp_version="$(npm view sharp version)"
+          case "${postcss_version}" in
+            8.*) ;;
+            *) echo "想定外のPostCSS major versionです: ${postcss_version}" >&2; exit 1 ;;
+          esac
+          case "${sharp_version}" in
+            0.*) ;;
+            *) echo "想定外のSharp major versionです: ${sharp_version}" >&2; exit 1 ;;
+          esac
+          npm pkg set "overrides.postcss=${postcss_version}" "overrides.sharp=${sharp_version}"
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm ls next postcss sharp
+          npm run lint
+          npm run typecheck
+          VAULTSEND_API_URL=http://localhost:8080 npm run build
+
+      - name: Go回帰テストを実行
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gofmt -w internal cmd
+          go vet ./...
+          go test -count=1 ./...
+          go build ./cmd/api ./cmd/worker ./cmd/cleanup-worker ./cmd/audit-worker
+
+      - name: コンテナ参照をdigest固定
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker pull golang:1.25.12-bookworm
+          docker pull gcr.io/distroless/static-debian12:nonroot
+          docker pull aquasec/trivy:0.70.0
+
+          go_builder="$(docker image inspect --format '{{index .RepoDigests 0}}' golang:1.25.12-bookworm)"
+          runtime_image="$(docker image inspect --format '{{index .RepoDigests 0}}' gcr.io/distroless/static-debian12:nonroot)"
+          trivy_image="$(docker image inspect --format '{{index .RepoDigests 0}}' aquasec/trivy:0.70.0)"
+
+          [[ "${go_builder}" == golang@sha256:* ]]
+          [[ "${runtime_image}" == gcr.io/distroless/static-debian12@sha256:* ]]
+          [[ "${trivy_image}" == aquasec/trivy@sha256:* ]]
+
+          sed -i "s|^FROM golang:.* AS builder$|FROM golang:1.25.12-bookworm@${go_builder#golang@} AS builder|" Dockerfile
+          sed -i "s|^FROM gcr.io/distroless/static-debian12:nonroot.* AS runtime$|FROM gcr.io/distroless/static-debian12:nonroot@${runtime_image#gcr.io/distroless/static-debian12@} AS runtime|" Dockerfile
+          sed -i "s|TRIVY_IMAGE=\"${TRIVY_IMAGE:-aquasec/trivy:0.70.0}\"|TRIVY_IMAGE=\"${TRIVY_IMAGE:-aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}}\"|" scripts/verify-supply-chain.sh
+          sed -i "s|^  TRIVY_IMAGE: aquasec/trivy:0.70.0$|  TRIVY_IMAGE: aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}|" .github/workflows/supply-chain.yml
+
+          printf '%s\n%s\n%s\n' "${go_builder}" "${runtime_image}" "${trivy_image}" | tee /tmp/image-digests.txt
+
+      - name: GitHub Actionsをcommit SHAへ固定
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          checkout_sha="$(git ls-remote https://github.com/actions/checkout.git refs/tags/v7.0.0^{} | awk '{print $1}')"
+          upload_sha="$(git ls-remote https://github.com/actions/upload-artifact.git refs/tags/v7.0.0^{} | awk '{print $1}')"
+          attest_sha="$(git ls-remote https://github.com/actions/attest.git refs/tags/v4.1.0^{} | awk '{print $1}')"
+          cosign_sha="$(git ls-remote https://github.com/sigstore/cosign-installer.git refs/tags/v4.1.2^{} | awk '{print $1}')"
+
+          for sha in "${checkout_sha}" "${upload_sha}" "${attest_sha}" "${cosign_sha}"; do
+            [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
+          done
+
+          sed -i "s|uses: actions/checkout@v7.0.0|uses: actions/checkout@${checkout_sha} # v7.0.0|g" .github/workflows/supply-chain.yml
+          sed -i "s|uses: actions/upload-artifact@v7.0.0|uses: actions/upload-artifact@${upload_sha} # v7.0.0|g" .github/workflows/supply-chain.yml
+          sed -i "s|uses: actions/attest@v4.1.0|uses: actions/attest@${attest_sha} # v4.1.0|g" .github/workflows/supply-chain.yml
+          sed -i "s|uses: sigstore/cosign-installer@v4.1.2|uses: sigstore/cosign-installer@${cosign_sha} # v4.1.2|g" .github/workflows/supply-chain.yml
+
+          printf '%s\n%s\n%s\n%s\n' "${checkout_sha}" "${upload_sha}" "${attest_sha}" "${cosign_sha}" | tee /tmp/action-shas.txt
+
+      - name: 更新結果をcommit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add go.mod go.sum Dockerfile web/package.json web/package-lock.json \
+            scripts/verify-supply-chain.sh .github/workflows/supply-chain.yml
+          if git diff --cached --quiet; then
+            echo "更新対象はありません。"
+            exit 0
+          fi
+          git commit -m "脆弱性修正版とdigest固定へ依存関係を更新"
+          git push origin HEAD:security/software-supply-chain
