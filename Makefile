@@ -1,7 +1,7 @@
 APP_NAME := vaultsend-api
 DB_URL ?= postgres://vaultsend:vaultsend@localhost:5432/vaultsend?sslmode=disable
 
-.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations
+.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain
 
 run:
 	go run ./cmd/api
@@ -59,3 +59,6 @@ container-build:
 
 verify-operations:
 	bash scripts/verify-operations-config.sh
+
+verify-supply-chain:
+	bash scripts/verify-supply-chain.sh
