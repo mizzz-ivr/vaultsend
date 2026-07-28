@@ -98,11 +98,14 @@ jobs:
           sed -i "s|^FROM golang:.* AS builder$|FROM golang:1.25.12-bookworm@${go_builder#golang@} AS builder|" Dockerfile
           sed -i "s|^FROM gcr.io/distroless/static-debian12:nonroot.* AS runtime$|FROM gcr.io/distroless/static-debian12:nonroot@${runtime_image#gcr.io/distroless/static-debian12@} AS runtime|" Dockerfile
           sed -i "s|TRIVY_IMAGE=\"aquasec/trivy:0.70.0\"|TRIVY_IMAGE=\"aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}\"|" scripts/verify-supply-chain.sh
-          sed -i "s|^  TRIVY_IMAGE: aquasec/trivy:0.70.0$|  TRIVY_IMAGE: aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}|" .github/workflows/supply-chain.yml
 
-          printf '%s\n%s\n%s\n' "${go_builder}" "${runtime_image}" "${trivy_image}" | tee /tmp/image-digests.txt
+          cat > .github/supply-chain-resolved-refs.env <<EOF
+          TRIVY_IMAGE=aquasec/trivy:0.70.0@${trivy_image#aquasec/trivy@}
+          GO_BUILDER_IMAGE=${go_builder}
+          RUNTIME_IMAGE=${runtime_image}
+          EOF
 
-      - name: GitHub Actionsをcommit SHAへ固定
+      - name: GitHub Actionsのcommit SHAを解決
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -126,12 +129,12 @@ jobs:
             [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]
           done
 
-          sed -i "s|uses: actions/checkout@v7.0.0|uses: actions/checkout@${checkout_sha} # v7.0.0|g" .github/workflows/supply-chain.yml
-          sed -i "s|uses: actions/upload-artifact@v7.0.0|uses: actions/upload-artifact@${upload_sha} # v7.0.0|g" .github/workflows/supply-chain.yml
-          sed -i "s|uses: actions/attest@v4.1.0|uses: actions/attest@${attest_sha} # v4.1.0|g" .github/workflows/supply-chain.yml
-          sed -i "s|uses: sigstore/cosign-installer@v4.1.2|uses: sigstore/cosign-installer@${cosign_sha} # v4.1.2|g" .github/workflows/supply-chain.yml
-
-          printf '%s\n%s\n%s\n%s\n' "${checkout_sha}" "${upload_sha}" "${attest_sha}" "${cosign_sha}" | tee /tmp/action-shas.txt
+          cat >> .github/supply-chain-resolved-refs.env <<EOF
+          CHECKOUT_ACTION_SHA=${checkout_sha}
+          UPLOAD_ARTIFACT_ACTION_SHA=${upload_sha}
+          ATTEST_ACTION_SHA=${attest_sha}
+          COSIGN_INSTALLER_ACTION_SHA=${cosign_sha}
+          EOF
 
       - name: 更新結果をcommit
         shell: bash
@@ -140,7 +143,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add go.mod go.sum Dockerfile web/package.json web/package-lock.json \
-            scripts/verify-supply-chain.sh .github/workflows/supply-chain.yml
+            scripts/verify-supply-chain.sh .github/supply-chain-resolved-refs.env
           if git diff --cached --quiet; then
             echo "更新対象はありません。"
             exit 0
