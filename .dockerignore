@@ -1,0 +1,16 @@
+.git
+.github
+.vscode
+.idea
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+coverage.out
+.ci-logs
+web/node_modules
+web/.next
+web/playwright-report
+web/test-results
+pgdata

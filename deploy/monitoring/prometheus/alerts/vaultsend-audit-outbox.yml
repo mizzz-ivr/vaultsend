@@ -1,0 +1,75 @@
+groups:
+  - name: vaultsend-audit-outbox
+    interval: 30s
+    rules:
+      - alert: VaultSendAPIMetricsUnavailable
+        expr: up{job="vaultsend-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: vaultsend
+          component: api-metrics
+        annotations:
+          summary: VaultSend内部Metricsへ到達できません
+          description: API停止、監視経路断、TLSまたはBearer token設定不整合を確認してください。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md
+
+      - alert: VaultSendAuditOutboxMetricMissing
+        expr: absent(vaultsend_audit_outbox_scrape_success{job="vaultsend-api"}) == 1
+        for: 5m
+        labels:
+          severity: critical
+          service: vaultsend
+          component: audit-outbox
+        annotations:
+          summary: 監査Outboxの成功可否Metricが消失しています
+          description: HTTP取得は成功していても、レスポンス形式変更やMetrics公開処理の異常が発生している可能性があります。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md
+
+      - alert: VaultSendAuditOutboxMetricsQueryFailed
+        expr: vaultsend_audit_outbox_scrape_success{job="vaultsend-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: vaultsend
+          component: audit-outbox
+        annotations:
+          summary: 監査Outbox集約クエリが失敗しています
+          description: APIからPostgreSQLへの接続、query timeout、API用DB roleのSELECT権限を確認してください。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md
+
+      - alert: VaultSendAuditOutboxDeliveryDelayed
+        expr: vaultsend_audit_outbox_oldest_pending_age_seconds{job="vaultsend-api"} > 300
+        for: 5m
+        labels:
+          severity: critical
+          service: vaultsend
+          component: audit-worker
+        annotations:
+          summary: 監査イベントの配送が5分以上遅延しています
+          description: audit-workerの死活、DB接続、worker用DB role、配送失敗ログを確認してください。Outbox行を手動削除しないでください。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md
+
+      - alert: VaultSendAuditOutboxBacklogHigh
+        expr: vaultsend_audit_outbox_pending{job="vaultsend-api"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: vaultsend
+          component: audit-worker
+        annotations:
+          summary: 監査Outboxの未処理件数が1000件を超えています
+          description: 流量増加、audit-worker停止、batch size不足、DB性能低下を確認してください。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md
+
+      - alert: VaultSendAuditOutboxBacklogGrowing
+        expr: delta(vaultsend_audit_outbox_pending{job="vaultsend-api"}[10m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: vaultsend
+          component: audit-worker
+        annotations:
+          summary: 監査Outboxの未処理件数が継続的に増加しています
+          description: 10分間で100件を超えて増加しています。配送能力と業務流量の差を確認してください。
+          runbook_url: https://github.com/mizzz-ivr/vaultsend/blob/main/docs/operations-observability-ja.md

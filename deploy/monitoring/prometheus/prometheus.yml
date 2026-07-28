@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
+  external_labels:
+    service: vaultsend
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: vaultsend-api
+    metrics_path: /internal/metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/internal_metrics_token
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/vaultsend-api.json
+        refresh_interval: 1m
