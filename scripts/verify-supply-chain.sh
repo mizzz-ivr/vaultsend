@@ -43,12 +43,42 @@ run_trivy() {
     "${TRIVY_IMAGE}" "$@"
 }
 
+source_skip_args=(
+  --skip-dirs .git
+  --skip-dirs .trivy-cache
+  --skip-dirs artifacts
+  --skip-dirs web/.next
+  --skip-dirs web/node_modules
+)
+
+# go.mod・package-lock.jsonを含むソース依存関係、Secret、IaC設定を記録する。
+run_trivy fs \
+  --scanners vuln,secret,misconfig \
+  --severity HIGH,CRITICAL \
+  --format json \
+  --output "${ARTIFACT_DIR}/source-security-report.json" \
+  "${source_skip_args[@]}" \
+  .
+
+# SecretとHigh/Criticalの設定不備は修正版有無に関係なく拒否する。
 run_trivy fs \
   --scanners secret,misconfig \
   --severity HIGH,CRITICAL \
   --exit-code 1 \
   --format table \
-  --output "${ARTIFACT_DIR}/source-security-report.txt" \
+  --output "${ARTIFACT_DIR}/source-security-gate.txt" \
+  "${source_skip_args[@]}" \
+  .
+
+# Go・Web依存関係で修正版があるHigh/Critical脆弱性を拒否する。
+run_trivy fs \
+  --scanners vuln \
+  --severity HIGH,CRITICAL \
+  --ignore-unfixed \
+  --exit-code 1 \
+  --format table \
+  --output "${ARTIFACT_DIR}/source-vulnerability-gate.txt" \
+  "${source_skip_args[@]}" \
   .
 
 run_trivy image \
@@ -56,7 +86,7 @@ run_trivy image \
   --scanners vuln \
   --severity HIGH,CRITICAL \
   --format json \
-  --output "${ARTIFACT_DIR}/vulnerabilities.json"
+  --output "${ARTIFACT_DIR}/image-vulnerabilities.json"
 
 run_trivy image \
   --input "${IMAGE_TAR}" \
@@ -73,7 +103,7 @@ jq -e '.bomFormat == "CycloneDX" and (.components | type == "array")' \
 jq -e '(.spdxVersion | startswith("SPDX-")) and (.packages | type == "array")' \
   "${ARTIFACT_DIR}/vaultsend.spdx.json" >/dev/null
 
-# 修正版が提供されているHigh/Critical脆弱性はリリースを停止する。
+# runtime imageで修正版が提供されているHigh/Critical脆弱性はリリースを停止する。
 # 修正版が存在しない脆弱性はJSONレポートへ残し、リスク受容または代替策を別途判断する。
 run_trivy image \
   --input "${IMAGE_TAR}" \
@@ -82,7 +112,7 @@ run_trivy image \
   --ignore-unfixed \
   --exit-code 1 \
   --format table \
-  --output "${ARTIFACT_DIR}/vulnerability-gate.txt"
+  --output "${ARTIFACT_DIR}/image-vulnerability-gate.txt"
 
 rm -f "${IMAGE_TAR}"
-echo "SBOM生成・Secret／設定検査・脆弱性ゲートに成功しました。"
+echo "SBOM生成・Secret／設定検査・Go／Web／コンテナ脆弱性ゲートに成功しました。"
