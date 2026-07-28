@@ -145,3 +145,7 @@ blob-report/
 
 # CI diagnostic logs
 .ci-logs/
+
+# Supply Chain verification output
+.trivy-cache/
+artifacts/supply-chain/
