@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 IMAGE_REF="${SUPPLY_CHAIN_IMAGE_REF:-vaultsend:supply-chain-scan}"
-TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.70.0}"
+TRIVY_IMAGE="${TRIVY_IMAGE:-aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e}"
 ARTIFACT_DIR="${SUPPLY_CHAIN_ARTIFACT_DIR:-artifacts/supply-chain}"
 IMAGE_TAR="${ARTIFACT_DIR}/vaultsend-image.tar"
 CACHE_DIR="${ROOT_DIR}/.trivy-cache"
