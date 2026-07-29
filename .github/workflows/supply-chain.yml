@@ -1,0 +1,221 @@
+name: Supply Chain Security
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .gitignore
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
+      - web/package.json
+      - web/package-lock.json
+      - scripts/verify-supply-chain.sh
+      - .github/workflows/supply-chain.yml
+      - .github/dependabot.yml
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .gitignore
+      - go.mod
+      - go.sum
+      - cmd/**
+      - internal/**
+      - web/package.json
+      - web/package-lock.json
+      - scripts/verify-supply-chain.sh
+      - .github/workflows/supply-chain.yml
+      - .github/dependabot.yml
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: mainブランチのイメージをGHCRへ公開する
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e
+  REGISTRY: ghcr.io
+
+jobs:
+  verify:
+    name: SBOM・Secret・脆弱性検証
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && !inputs.publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Supply Chain検証を実行
+        shell: bash
+        run: bash scripts/verify-supply-chain.sh
+
+      - name: SBOM・検査結果を保存
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: supply-chain-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/supply-chain
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: GHCR公開・署名・Attestation
+    if: >-
+      (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: GHCRへログイン
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | docker login "${REGISTRY}" \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: Buildxを初期化
+        shell: bash
+        run: |
+          docker buildx create --name vaultsend-supply-chain --driver docker-container --use
+          docker buildx inspect --bootstrap
+
+      - name: イメージをdigest固定でGHCRへ公開
+        id: build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/supply-chain
+
+          image_ref="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          tags=("${image_ref}:sha-${GITHUB_SHA::12}")
+
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            tags+=("${image_ref}:main")
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            tags+=("${image_ref}:${version}" "${image_ref}:latest")
+          fi
+
+          build_args=(
+            --file Dockerfile
+            --target runtime
+            --platform linux/amd64
+            --push
+            --provenance=false
+            --sbom=false
+            --metadata-file artifacts/supply-chain/build-metadata.json
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}"
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}"
+          )
+          for tag in "${tags[@]}"; do
+            build_args+=(--tag "${tag}")
+          done
+
+          docker buildx build "${build_args[@]}" .
+
+          digest="$(jq -r '."containerimage.digest"' artifacts/supply-chain/build-metadata.json)"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "イメージdigestを取得できませんでした: ${digest}" >&2
+            exit 1
+          fi
+
+          printf '%s\n' "${image_ref}@${digest}" | tee artifacts/supply-chain/image-reference.txt
+          echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: 公開イメージをSBOM・脆弱性検証
+        shell: bash
+        env:
+          SUPPLY_CHAIN_IMAGE_REF: vaultsend:supply-chain-release
+          SUPPLY_CHAIN_SKIP_BUILD: "true"
+        run: |
+          docker pull "${{ steps.build.outputs.image_ref }}@${{ steps.build.outputs.digest }}"
+          docker tag \
+            "${{ steps.build.outputs.image_ref }}@${{ steps.build.outputs.digest }}" \
+            "${SUPPLY_CHAIN_IMAGE_REF}"
+          bash scripts/verify-supply-chain.sh
+
+      - name: Build provenanceを署名・登録
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ steps.build.outputs.image_ref }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: SPDX SBOMを署名・登録
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ steps.build.outputs.image_ref }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: artifacts/supply-chain/vaultsend.spdx.json
+          push-to-registry: true
+
+      - name: Cosignをセットアップ
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: OIDC keyless署名を追加
+        shell: bash
+        run: |
+          cosign sign --yes \
+            "${{ steps.build.outputs.image_ref }}@${{ steps.build.outputs.digest }}"
+
+      - name: Cosign署名を即時検証
+        shell: bash
+        run: |
+          cosign verify \
+            --certificate-identity "https://github.com/${GITHUB_WORKFLOW_REF}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${{ steps.build.outputs.image_ref }}@${{ steps.build.outputs.digest }}"
+
+      - name: GitHub Attestationを即時検証
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh attestation verify \
+            "oci://${{ steps.build.outputs.image_ref }}@${{ steps.build.outputs.digest }}" \
+            --repo "${GITHUB_REPOSITORY}"
+
+      - name: SBOM・検査結果を保存
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: supply-chain-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/supply-chain
+          if-no-files-found: warn
+          retention-days: 90
