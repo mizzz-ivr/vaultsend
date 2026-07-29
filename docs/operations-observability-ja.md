@@ -13,6 +13,7 @@
 - Alertmanager webhook通知
 - Grafana datasource・dashboard provisioning
 - CIによる設定検証
+- 署名・provenance・SBOM検証済みdigestだけを起動するデプロイ前ゲート
 
 ## 2. 適用範囲
 
@@ -25,6 +26,7 @@
 - `/internal/metrics`は内部ネットワークからのみ到達可能にする
 - Prometheus ruleとGrafana dashboardを同一内容で配備する
 - Secretを平文環境変数、Git、コンテナイメージへ格納しない
+- 期待するrepository・workflow・refから署名されたdigestだけを実行する
 
 ## 3. コンテナイメージ
 
@@ -133,32 +135,104 @@ Prometheus、Alertmanager、Grafanaは同networkへ接続します。
 
 Prometheus・Alertmanager・Grafanaのhost portは`127.0.0.1`へだけbindします。外部から参照する場合は、認証・TLS・アクセス制御を備えた管理用reverse proxyまたはVPN経由に限定します。
 
-## 8. 起動
+## 8. 検証済みイメージの起動
 
-環境変数例をコピーします。
+### 8.1 前提コマンドと認証
+
+デプロイhostへ以下を導入します。
+
+- Docker Engine・Docker Compose
+- Cosign
+- GitHub CLI
+- jq
+
+GHCRとGitHub CLIを事前認証します。
+
+```bash
+docker login ghcr.io
+gh auth login
+```
+
+非対話実行では、最小権限のcredentialをDocker credential storeと`GH_TOKEN`から参照します。credentialを`.env`、shell履歴、Gitへ保存しません。
+
+### 8.2 環境変数・Secret準備
 
 ```bash
 cd deploy/compose
 cp .env.example .env
+cd ../..
 ```
 
-`.env`内のイメージ、Secretファイルpath、network名を環境に合わせて変更します。
+`.env`内のSecretファイルpath、network名、監視設定を環境に合わせて変更します。
 
-設定展開だけを確認:
+`.env`の`VAULTSEND_IMAGE`はplaceholderです。実際のデプロイではwrapperが検証済みdigestで上書きします。`.env`を使った直接の`docker compose up`は禁止します。
+
+### 8.3 デプロイ前チェック
+
+GitHub ActionsのSupply Chain Workflowが公開した、完全なdigest参照を指定します。
 
 ```bash
-docker compose -f operations.yml config
+export VAULTSEND_IMAGE='ghcr.io/mizzz-ivr/vaultsend@sha256:<64桁のdigest>'
+make check-operations-deploy
 ```
 
-起動:
+`--check`相当では以下を行います。
+
+1. repositoryが`ghcr.io/mizzz-ivr/vaultsend`と完全一致するか確認
+2. SHA-256 digest固定か確認
+3. digest指定でイメージをpull
+4. pull後のRepoDigest一致確認
+5. OCI source labelが公式repositoryと一致するか確認
+6. OCI revision labelが40桁のcommit SHAか確認
+7. Cosign署名を期待するGitHub Actions identityとOIDC issuerで検証
+8. GitHub build provenanceをrepository・signer workflow・`refs/heads/main`・source digest固定で検証
+9. SPDX SBOM Attestationを同じidentity条件で検証
+10. Compose設定を展開・検証
+
+イメージのlocal cacheは更新しますが、コンテナの作成・再起動・停止は行いません。
+
+### 8.4 デプロイ
+
+事前チェックと同じdigestを指定し、明示的なデプロイコマンドを実行します。
 
 ```bash
-docker compose -f operations.yml up -d
+export VAULTSEND_IMAGE='ghcr.io/mizzz-ivr/vaultsend@sha256:<64桁のdigest>'
+make deploy-operations
 ```
 
-状態確認:
+wrapperは署名・provenance・SPDX SBOMを再検証し、すべて成功した場合だけ以下を実行します。
 
 ```bash
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/operations.yml \
+  up -d --remove-orphans --no-build
+```
+
+`VAULTSEND_IMAGE`は検証済みdigestでprocess環境から上書きされます。タグ指定、別repository、署名不一致、Attestation不足、source revision不一致の場合はCompose起動へ進みません。
+
+### 8.5 検証証跡
+
+既定では以下へ保存します。
+
+```text
+artifacts/deploy-verification/
+├── requested-image.txt
+├── image-inspect.json
+├── source-revision.txt
+├── cosign-verification.json
+├── provenance-verification.json
+├── sbom-verification.json
+└── verification-summary.json
+```
+
+ディレクトリは権限`700`、生成ファイルは`umask 077`で作成します。symbolic linkの結果ディレクトリは拒否します。
+
+本番監査では、デプロイ日時、実行者、対象環境、`verification-summary.json`、Compose状態、変更承認記録を関連付けて保管します。
+
+### 8.6 状態確認・停止
+
+```bash
+cd deploy/compose
 docker compose -f operations.yml ps
 docker compose -f operations.yml logs --tail=100 audit-worker
 docker compose -f operations.yml logs --tail=100 prometheus
@@ -245,6 +319,18 @@ UI上の編集は無効です。変更はJSONをPull Requestでレビューし�
 
 ## 13. 障害対応
 
+### デプロイ前ゲート失敗
+
+1. タグではなく`ghcr.io/mizzz-ivr/vaultsend@sha256:<digest>`を指定しているか確認
+2. `docker login ghcr.io`と`gh auth status`を確認
+3. OCI source・revision labelを確認
+4. Cosign certificate identityが`Supply Chain Security` Workflowの`main`実行か確認
+5. provenanceとSPDX SBOM Attestationが同じdigest・source commitに存在するか確認
+6. 検証に失敗したdigestを起動しない
+7. 正規Workflowから再build・再署名し、新しいdigestを発行する
+
+検証失敗したイメージへ手動で署名だけを後付けし、正規リリース扱いにはしません。
+
 ### `VaultSendAPIMetricsUnavailable`
 
 1. APIプロセス・containerの死活を確認
@@ -258,68 +344,3 @@ UI上の編集は無効です。変更はJSONをPull Requestでレビューし�
 2. API用DB roleがOutbox集約SELECTを実行可能か確認
 3. `INTERNAL_METRICS_QUERY_TIMEOUT_SEC`とDB負荷を確認
 4. APIログの`event=internal_metrics_query_failed`を確認
-
-### `VaultSendAuditOutboxDeliveryDelayed`
-
-1. audit-worker containerが起動中か確認
-2. workerログの`security_audit_outbox_run_failed`を確認
-3. worker用DB Secretとrole権限を確認
-4. PostgreSQL lock・接続数・IO負荷を確認
-5. 復旧後にpendingと最古時間が減少することを確認
-
-監査Outbox行を手動削除してアラートだけを解消してはいけません。最終監査テーブルへの配送確認なしに削除すると、監査証跡が欠落します。
-
-## 14. バックアップ・保持
-
-- Prometheus保持期間の初期値は15日
-- audit-workerの処理済みOutbox保持期間の初期値は7日
-- 最終監査イベントの保持方針はOutboxと分離する
-- Grafana dashboardはGitで管理する
-- Prometheus local volumeを監査証跡の原本として扱わない
-
-監査証跡の原本は`security_audit_events`です。PrometheusとGrafanaは運用監視用途であり、監査保管の代替ではありません。
-
-## 15. 設定検証
-
-```bash
-make verify-operations
-```
-
-検証内容:
-
-- VaultSend container build
-- runtime UID/GIDが`65532:65532`
-- Docker Compose設定展開
-- Prometheus設定
-- Prometheus alert rule
-- Alertmanager設定
-- Grafana dashboard JSON
-
-GitHub Actionsの`Operations` Workflowでも同じ検証を実行します。
-
-## 16. リリース前確認
-
-- [ ] アプリイメージをdigest固定した
-- [ ] Prometheus・Alertmanager・Grafanaを検証済みdigestへ固定した
-- [ ] worker専用DB roleを作成した
-- [ ] API・worker・migrationのSecretを分離した
-- [ ] SecretファイルをGit管理外にした
-- [ ] 監視networkをinternalとして作成した
-- [ ] 管理UIをインターネットへ直接公開していない
-- [ ] Alertmanagerの通知テストを実施した
-- [ ] Critical alertの担当者・連絡経路を決定した
-- [ ] Grafana管理者パスワードを初期値から変更した
-- [ ] backup・restore手順を確認した
-
-## 17. 対象外・後続
-
-- AWS ECS／EKS等のクラウド固有Terraform
-- container imageの署名・SBOM・SLSA provenance
-- vulnerability scanと更新自動化
-- Alertmanagerの高可用化
-- Prometheusの長期保存・remote write
-- audit-worker専用heartbeat Metric
-- DB role作成・GRANTのIaC
-- 通知先サービス固有のtemplate
-
-クラウド構成決定後、上記を別PRで追加します。
