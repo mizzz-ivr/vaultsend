@@ -149,3 +149,4 @@ blob-report/
 # Supply Chain verification output
 .trivy-cache/
 artifacts/supply-chain/
+artifacts/deploy-verification/
