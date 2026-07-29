@@ -1,0 +1,111 @@
+name: Supply Chain Documentation Patch Temporary
+
+on:
+  push:
+    branches:
+      - security/verified-compose-deployment
+    paths:
+      - .github/patch-supply-chain-doc.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 対象ブランチを取得
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: security/verified-compose-deployment
+
+      - name: 運用文書を現在の実装へ同期
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/software-supply-chain-security-ja.md")
+          text = path.read_text(encoding="utf-8")
+
+          old_verify = '''検証例:
+
+```bash
+gh auth login
+docker login ghcr.io
+gh attestation verify \\
+  oci://ghcr.io/mizzz-ivr/vaultsend@sha256:<digest> \\
+  --repo mizzz-ivr/vaultsend
+```
+
+Cosign検証例:
+
+```bash
+cosign verify \\
+  --certificate-identity \\
+  "https://github.com/mizzz-ivr/vaultsend/.github/workflows/supply-chain.yml@refs/heads/main" \\
+  --certificate-oidc-issuer \\
+  "https://token.actions.githubusercontent.com" \\
+  ghcr.io/mizzz-ivr/vaultsend@sha256:<digest>
+```
+
+release tagの場合はcertificate identityのrefを対象tagへ変更します。'''
+
+          new_verify = '''### デプロイ時の強制検証
+
+Docker Compose運用では、個別の確認コマンドを手作業で実行せず、次のデプロイ前ゲートを使用します。
+
+```bash
+export VAULTSEND_IMAGE='ghcr.io/mizzz-ivr/vaultsend@sha256:<digest>'
+make check-operations-deploy
+```
+
+このゲートは、以下を同じdigestとsource commitへ関連付けて検証します。
+
+- Cosign certificate identity・OIDC issuer
+- GitHub build provenance
+- SPDX SBOM Attestation
+- signer workflow
+- source ref `refs/heads/main`
+- OCI source・revision label
+
+すべて成功した場合だけ、`make deploy-operations`でComposeを起動します。詳細は`docs/operations-observability-ja.md`を参照してください。
+
+release tagを直接デプロイするidentity policyは本対応の対象外です。'''
+
+          old_check = '''- Cosign署名を期待identityで検証できる
+- GitHub Attestationを検証できる
+- package visibilityとpull権限を確認した
+- デプロイ先がtagではなくdigestを使用している'''
+
+          new_check = '''- Cosign署名を期待identityで検証できる
+- GitHub Attestationを検証できる
+- `make check-operations-deploy`が同じdigestで成功する
+- package visibilityとpull権限を確認した
+- デプロイ先がtagではなくdigestを使用している'''
+
+          old_final = '''行政利用に向けた次段階では、デプロイ基盤側で署名・provenanceを必須化し、Workflowが生成した証跡を「確認できる」状態から「満たさないimageは実行できない」状態へ進めます。'''
+          new_final = '''Docker Compose運用では、署名・provenance・SPDX SBOMを検証できないimageをwrapperから起動できない状態まで対応しています。ECSやKubernetesへ移行する場合は、同じpolicyをtask definitionの更新処理またはadmission controllerへ移植し、基盤側でも迂回できない状態にします。'''
+
+          replacements = [
+              (old_verify, new_verify),
+              (old_check, new_check),
+              (old_final, new_final),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"置換対象が見つかりません: {old[:80]!r}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: 更新結果をcommit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/software-supply-chain-security-ja.md
+          git commit -m "Supply Chain文書へComposeデプロイ前ゲートを反映"
+          git push origin HEAD:security/verified-compose-deployment
