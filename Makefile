@@ -1,7 +1,7 @@
 APP_NAME := vaultsend-api
 DB_URL ?= postgres://vaultsend:vaultsend@localhost:5432/vaultsend?sslmode=disable
 
-.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain
+.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain verify-release-image check-operations-deploy deploy-operations
 
 run:
 	go run ./cmd/api
@@ -62,3 +62,15 @@ verify-operations:
 
 verify-supply-chain:
 	bash scripts/verify-supply-chain.sh
+
+verify-release-image:
+	@test -n "$(VAULTSEND_IMAGE)" || (echo "VAULTSEND_IMAGEにdigest固定イメージを指定してください" >&2; exit 1)
+	bash scripts/verify-release-image.sh "$(VAULTSEND_IMAGE)"
+
+check-operations-deploy:
+	@test -n "$(VAULTSEND_IMAGE)" || (echo "VAULTSEND_IMAGEにdigest固定イメージを指定してください" >&2; exit 1)
+	bash scripts/deploy-verified-compose.sh --check "$(VAULTSEND_IMAGE)"
+
+deploy-operations:
+	@test -n "$(VAULTSEND_IMAGE)" || (echo "VAULTSEND_IMAGEにdigest固定イメージを指定してください" >&2; exit 1)
+	bash scripts/deploy-verified-compose.sh --deploy "$(VAULTSEND_IMAGE)"
