@@ -4,5 +4,9 @@
 /Dockerfile @mizzz-ivr
 /.dockerignore @mizzz-ivr
 /scripts/verify-supply-chain.sh @mizzz-ivr
+/scripts/verify-release-image.sh @mizzz-ivr
+/scripts/deploy-verified-compose.sh @mizzz-ivr
+/scripts/test-verified-compose-deployment.sh @mizzz-ivr
 /docs/software-supply-chain-security-ja.md @mizzz-ivr
+/docs/operations-observability-ja.md @mizzz-ivr
 /deploy/ @mizzz-ivr
