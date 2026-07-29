@@ -13,6 +13,9 @@ on:
       - internal/config/**
       - deploy/**
       - scripts/verify-operations-config.sh
+      - scripts/verify-release-image.sh
+      - scripts/deploy-verified-compose.sh
+      - scripts/test-verified-compose-deployment.sh
       - .github/workflows/operations.yml
   push:
     branches:
@@ -26,6 +29,9 @@ on:
       - internal/config/**
       - deploy/**
       - scripts/verify-operations-config.sh
+      - scripts/verify-release-image.sh
+      - scripts/deploy-verified-compose.sh
+      - scripts/test-verified-compose-deployment.sh
       - .github/workflows/operations.yml
   workflow_dispatch:
 
@@ -38,13 +44,13 @@ concurrency:
 
 jobs:
   verify:
-    name: Container・Compose・Monitoring
+    name: Container・Compose・Monitoring・Deploy Gate
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
     steps:
       - name: リポジトリを取得
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: 診断ログディレクトリを作成
         run: mkdir -p .ci-logs/operations
@@ -58,6 +64,17 @@ jobs:
             jq --version
           } 2>&1 | tee .ci-logs/operations/tool-versions.log
 
+      - name: デプロイ前ゲートの構文とmock動作を検証
+        shell: bash
+        run: |
+          set -o pipefail
+          bash -n \
+            scripts/verify-release-image.sh \
+            scripts/deploy-verified-compose.sh \
+            scripts/test-verified-compose-deployment.sh
+          bash scripts/test-verified-compose-deployment.sh \
+            2>&1 | tee .ci-logs/operations/deploy-gate-test.log
+
       - name: コンテナと監視設定を検証
         shell: bash
         run: |
@@ -66,7 +83,7 @@ jobs:
 
       - name: 運用設定の失敗ログを保存
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: operations-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .ci-logs/operations
