@@ -24,7 +24,7 @@ require_command() {
     || fail "必要なコマンドが見つかりません: ${command_name}"
 }
 
-for command_name in jq date sha256sum; do
+for command_name in awk date jq sha256sum; do
   require_command "${command_name}"
 done
 
