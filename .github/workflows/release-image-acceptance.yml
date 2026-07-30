@@ -40,8 +40,7 @@ jobs:
     if: >-
       (github.event_name != 'workflow_run' ||
         (github.event.workflow_run.conclusion == 'success' &&
-          (github.event.workflow_run.event == 'push' ||
-            github.event.workflow_run.event == 'workflow_dispatch'))) &&
+          github.event.workflow_run.event == 'push')) &&
       (github.event_name != 'pull_request' ||
         github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -52,6 +51,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+          fetch-depth: 0
 
       - name: 検証scriptの構文とmock動作を確認
         shell: bash
@@ -99,11 +99,26 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
             expected_revision="${WORKFLOW_RUN_HEAD_SHA}"
           else
-            expected_revision="$(git ls-remote origin refs/heads/main | awk 'NR == 1 {print $1}')"
+            git fetch --no-tags origin main:refs/remotes/origin/main
+            expected_revision="$(
+              git rev-list -1 origin/main -- \
+                Dockerfile \
+                .dockerignore \
+                .gitignore \
+                go.mod \
+                go.sum \
+                cmd \
+                internal \
+                web/package.json \
+                web/package-lock.json \
+                scripts/verify-supply-chain.sh \
+                .github/workflows/supply-chain.yml \
+                .github/dependabot.yml
+            )"
           fi
 
           if [[ ! "${expected_revision}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "期待するmain commitを解決できませんでした: ${expected_revision}" >&2
+            echo "期待する公開対象commitを解決できませんでした: ${expected_revision}" >&2
             exit 1
           fi
 
