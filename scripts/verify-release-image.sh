@@ -124,13 +124,15 @@ jq -e 'type == "array" and length > 0' \
   "${REPORT_DIR}/cosign-verification.json" >/dev/null \
   || fail "Cosign署名の検証結果が空です"
 
+# GitHub CLIではsigner-workflowとcert-identityが排他的なため、
+# Attestationはsigner workflow、source ref/digest、OIDC issuerで固定する。
+# 完全なcertificate identityは上記Cosign検証で別途確認する。
 attestation_common_args=(
   "oci://${IMAGE_REF}"
   --repo "${EXPECTED_GITHUB_REPOSITORY}"
   --signer-workflow "${EXPECTED_SIGNER_WORKFLOW}"
   --source-ref "${EXPECTED_SOURCE_REF}"
   --source-digest "${verified_source_revision}"
-  --cert-identity "${EXPECTED_CERTIFICATE_IDENTITY}"
   --cert-oidc-issuer "${EXPECTED_OIDC_ISSUER}"
   --deny-self-hosted-runners
   --format json
@@ -162,8 +164,8 @@ cat > "${REPORT_DIR}/verification-summary.json" <<EOF
   "revision": "${revision}",
   "expected_revision": "${verified_source_revision}",
   "source_ref": "${EXPECTED_SOURCE_REF}",
-  "signer_workflow": "${EXPECTED_SIGNER_WORKFLOW}",
-  "certificate_identity": "${EXPECTED_CERTIFICATE_IDENTITY}",
+  "attestation_signer_workflow": "${EXPECTED_SIGNER_WORKFLOW}",
+  "cosign_certificate_identity": "${EXPECTED_CERTIFICATE_IDENTITY}",
   "oidc_issuer": "${EXPECTED_OIDC_ISSUER}",
   "provenance_verified": true,
   "spdx_sbom_verified": true,
