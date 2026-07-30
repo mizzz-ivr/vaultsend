@@ -80,6 +80,11 @@ if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then
 fi
 
 if [[ "${1:-}" == "attestation" && "${2:-}" == "verify" ]]; then
+  if [[ " $* " == *" --signer-workflow "* && " $* " == *" --cert-identity "* ]]; then
+    echo "signer-workflowとcert-identityは同時指定できません" >&2
+    exit 2
+  fi
+
   kind="provenance"
   if [[ " $* " == *" --predicate-type "* ]]; then
     kind="sbom"
@@ -216,6 +221,11 @@ jq -e \
   "${DEPLOY_VERIFICATION_DIR}/verification-summary.json" >/dev/null
 [[ "$(grep -c '^gh attestation verify ' "${COMMAND_LOG}")" -eq 2 ]]
 [[ "$(grep -c '^cosign verify ' "${COMMAND_LOG}")" -eq 1 ]]
+! grep -q -- '--cert-identity' "${COMMAND_LOG}" || {
+  echo "FAIL: GitHub Attestation検証へcert-identityが再追加されています" >&2
+  exit 1
+}
+grep -q -- '--signer-workflow mizzz-ivr/vaultsend/.github/workflows/supply-chain.yml' "${COMMAND_LOG}"
 
 new_case
 expect_success "--checkではComposeを起動しない" \
