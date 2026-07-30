@@ -46,7 +46,7 @@ GHCRへのpush、OIDC token発行、署名、Attestation登録、デプロイ操
 
 ### 定期・手動・Pull Request
 
-単純な`main` HEADではなく、Supply Chain Workflowの公開対象pathを最後に変更したcommitを算出します。
+単純な`main` HEADではなく、Supply Chain Workflowの公開対象pathを最後に変更したcommitを、`main`のfirst-parent履歴から算出します。
 
 対象path:
 
@@ -65,6 +65,8 @@ scripts/verify-supply-chain.sh
 .github/dependabot.yml
 ```
 
+first-parentへ限定することで、Pull Requestのmerge commitを公開revisionとして扱い、mergeの第2親にある作業branch内commitを誤って期待値にしません。
+
 文書だけの変更でイメージを再公開していない場合に誤検知せず、コンテナ内容へ影響する変更後に公開が行われていない場合は不一致として検出します。
 
 Supply Chain Workflowの`push.paths`を変更する場合は、この一覧も同じPull Requestで更新します。
@@ -81,6 +83,20 @@ Supply Chain Workflowの`push.paths`を変更する場合は、この一覧も�
 8. Job SummaryとArtifactへ結果を保存
 
 タグはdigest解決の入口にのみ使用し、署名・Attestation検証は必ずdigest参照に対して実行します。
+
+### Identity検証の責務分離
+
+現在のGitHub CLIでは、`gh attestation verify`の`--signer-workflow`と`--cert-identity`は排他的です。両方を同時指定しません。
+
+検証責務は次のように分離します。
+
+| 対象 | 固定する条件 |
+|---|---|
+| Cosign署名 | 完全なcertificate identity、OIDC issuer、コンテナdigest |
+| GitHub build provenance | signer workflow、source ref、source digest、OIDC issuer、repository、非self-hosted runner |
+| SPDX SBOM Attestation | provenanceと同じ条件に加え、SPDX predicate type |
+
+この分離により、Attestation検証のCLI制約を満たしながら、完全なGitHub Actions certificate identityはCosign側で引き続き確認します。
 
 ## 6. 検証証跡
 
@@ -133,6 +149,7 @@ artifacts/release-acceptance/
 
 - GitHub Artifact Attestationの登録結果を確認
 - source ref、source digest、signer workflowを確認
+- identity選択flagを重複指定していないか確認
 - SBOM生成・登録stepを確認
 - 証跡が揃うまでデプロイしない
 
