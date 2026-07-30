@@ -1,0 +1,155 @@
+name: Release Image Acceptance
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/verify-release-image.sh
+      - scripts/test-verified-compose-deployment.sh
+      - .github/workflows/release-image-acceptance.yml
+      - .github/workflows/supply-chain.yml
+  workflow_run:
+    workflows:
+      - Supply Chain Security
+    types:
+      - completed
+    branches:
+      - main
+  schedule:
+    # 毎日03:15 JST。GitHub ActionsのcronはUTC。
+    - cron: "15 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  attestations: read
+
+concurrency:
+  group: release-image-acceptance-${{ github.repository }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  EXPECTED_IMAGE_REPOSITORY: ghcr.io/mizzz-ivr/vaultsend
+
+jobs:
+  verify-main-image:
+    name: 公開済みmainイメージの署名・Attestation検証
+    if: >-
+      (github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+          (github.event.workflow_run.event == 'push' ||
+            github.event.workflow_run.event == 'workflow_dispatch'))) &&
+      (github.event_name != 'pull_request' ||
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 検証コードを取得
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+
+      - name: 検証scriptの構文とmock動作を確認
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n \
+            scripts/verify-release-image.sh \
+            scripts/deploy-verified-compose.sh \
+            scripts/test-verified-compose-deployment.sh
+          bash scripts/test-verified-compose-deployment.sh
+
+      - name: GHCRへread-onlyログイン
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | docker login "${REGISTRY}" \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: 公開済みmainタグをdigestへ解決
+        id: release
+        shell: bash
+        env:
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -Eeuo pipefail
+
+          image_tag="${EXPECTED_IMAGE_REPOSITORY}:main"
+          docker pull "${image_tag}"
+
+          repo_digests_json="$(docker image inspect --format '{{json .RepoDigests}}' "${image_tag}")"
+          image_ref="$(
+            jq -er \
+              --arg prefix "${EXPECTED_IMAGE_REPOSITORY}@" \
+              '[.[] | select(startswith($prefix))][0] // empty' \
+              <<<"${repo_digests_json}"
+          )"
+
+          if [[ ! "${image_ref}" =~ ^ghcr\.io/mizzz-ivr/vaultsend@sha256:[0-9a-f]{64}$ ]]; then
+            echo "mainタグを正規のdigest参照へ解決できませんでした: ${image_ref}" >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            expected_revision="${WORKFLOW_RUN_HEAD_SHA}"
+          else
+            expected_revision="$(git ls-remote origin refs/heads/main | awk 'NR == 1 {print $1}')"
+          fi
+
+          if [[ ! "${expected_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "期待するmain commitを解決できませんでした: ${expected_revision}" >&2
+            exit 1
+          fi
+
+          printf '%s\n' "${image_ref}" | tee release-image-reference.txt
+          printf '%s\n' "${expected_revision}" | tee release-expected-revision.txt
+          echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+          echo "expected_revision=${expected_revision}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cosignをセットアップ
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: 実GHCRイメージをデプロイpolicyで検証
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VAULTSEND_IMAGE: ${{ steps.release.outputs.image_ref }}
+          EXPECTED_SOURCE_REVISION: ${{ steps.release.outputs.expected_revision }}
+          DEPLOY_VERIFICATION_DIR: artifacts/release-acceptance
+        run: bash scripts/verify-release-image.sh
+
+      - name: 検証結果をJob Summaryへ記録
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '## Release Image Acceptance'
+            echo
+            echo '| 項目 | 値 |'
+            echo '|---|---|'
+            jq -r '
+              "| Image | `\(.image)` |\n" +
+              "| Revision | `\(.revision)` |\n" +
+              "| Cosign | \(.cosign_signature_verified) |\n" +
+              "| Provenance | \(.provenance_verified) |\n" +
+              "| SPDX SBOM | \(.spdx_sbom_verified) |"
+            ' artifacts/release-acceptance/verification-summary.json
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: 検証証跡を保存
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-image-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/release-acceptance
+            release-image-reference.txt
+            release-expected-revision.txt
+          if-no-files-found: warn
+          retention-days: 90
