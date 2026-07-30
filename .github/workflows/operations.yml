@@ -75,8 +75,21 @@ jobs:
           {
             docker version
             docker compose version
+            go version
             jq --version
           } 2>&1 | tee .ci-logs/operations/tool-versions.log
+
+      - name: GitHub Actions Workflowをactionlintで検証
+        shell: bash
+        env:
+          GOTOOLCHAIN: auto
+        run: |
+          set -o pipefail
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+            .github/workflows/operations.yml \
+            .github/workflows/release-image-acceptance.yml \
+            .github/workflows/production-deploy.yml \
+            2>&1 | tee .ci-logs/operations/actionlint.log
 
       - name: デプロイ前ゲートの構文とmock動作を検証
         shell: bash
