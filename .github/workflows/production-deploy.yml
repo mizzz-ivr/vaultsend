@@ -171,13 +171,29 @@ jobs:
       - name: Cosignをセットアップ
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      - name: production runnerと実行contextを検証
+      - name: production Environment・runner・実行contextを検証
         shell: bash
         env:
           RUNNER_ENVIRONMENT_VALUE: ${{ runner.environment }}
+          RUNNER_NAME_VALUE: ${{ runner.name }}
           WORKFLOW_REF_VALUE: ${{ github.workflow_ref }}
+          PRODUCTION_DEPLOYMENT_ENABLED_VALUE: ${{ vars.PRODUCTION_DEPLOYMENT_ENABLED }}
+          PRODUCTION_RUNNER_NAME_EXPECTED: ${{ vars.PRODUCTION_RUNNER_NAME }}
+          PRODUCTION_ENVIRONMENT_GUARD_VALUE: ${{ secrets.PRODUCTION_ENVIRONMENT_GUARD }}
         run: |
           set -Eeuo pipefail
+          [[ "${PRODUCTION_DEPLOYMENT_ENABLED_VALUE}" == "true" ]] || {
+            echo 'production Environmentが有効化されていません' >&2
+            exit 1
+          }
+          [[ -n "${PRODUCTION_RUNNER_NAME_EXPECTED}" && "${RUNNER_NAME_VALUE}" == "${PRODUCTION_RUNNER_NAME_EXPECTED}" ]] || {
+            echo "実行runnerがproduction Environmentの期待値と一致しません: ${RUNNER_NAME_VALUE}" >&2
+            exit 1
+          }
+          [[ ${#PRODUCTION_ENVIRONMENT_GUARD_VALUE} -ge 32 ]] || {
+            echo 'production Environment guardが未設定または短すぎます' >&2
+            exit 1
+          }
           [[ "${RUNNER_ENVIRONMENT_VALUE}" == "self-hosted" ]] || {
             echo '本番デプロイはself-hosted runnerでのみ実行できます' >&2
             exit 1
@@ -198,7 +214,7 @@ jobs:
             echo 'self-hosted runnerをrootで実行しないでください' >&2
             exit 1
           }
-          for command_name in docker gh jq stat; do
+          for command_name in date docker gh jq seq sha256sum sort stat; do
             command -v "${command_name}" >/dev/null 2>&1 || {
               echo "必要なコマンドが見つかりません: ${command_name}" >&2
               exit 1
@@ -329,6 +345,8 @@ jobs:
       - name: 本番デプロイ結果をJob Summaryへ記録
         if: success()
         shell: bash
+        env:
+          RUNNER_NAME_VALUE: ${{ runner.name }}
         run: |
           {
             echo '## 本番デプロイ成功'
@@ -338,7 +356,7 @@ jobs:
             echo "| 変更管理番号 | \`${{ inputs.change_request_id }}\` |"
             echo "| Image | \`${{ needs.prepare.outputs.image_ref }}\` |"
             echo "| Revision | \`${{ needs.prepare.outputs.source_revision }}\` |"
-            echo "| Runner | \`${{ runner.name }}\` |"
+            echo "| Runner | \`${RUNNER_NAME_VALUE}\` |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 本番デプロイ証跡を保存
