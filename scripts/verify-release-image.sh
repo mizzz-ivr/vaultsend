@@ -9,6 +9,7 @@ EXPECTED_SOURCE_URL="${EXPECTED_SOURCE_URL:-https://github.com/mizzz-ivr/vaultse
 EXPECTED_SIGNER_WORKFLOW="${EXPECTED_SIGNER_WORKFLOW:-mizzz-ivr/vaultsend/.github/workflows/supply-chain.yml}"
 EXPECTED_CERTIFICATE_IDENTITY="${EXPECTED_CERTIFICATE_IDENTITY:-https://github.com/mizzz-ivr/vaultsend/.github/workflows/supply-chain.yml@refs/heads/main}"
 EXPECTED_SOURCE_REF="${EXPECTED_SOURCE_REF:-refs/heads/main}"
+EXPECTED_SOURCE_REVISION="${EXPECTED_SOURCE_REVISION:-}"
 EXPECTED_OIDC_ISSUER="${EXPECTED_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 SPDX_PREDICATE_TYPE="${SPDX_PREDICATE_TYPE:-https://spdx.dev/Document/v2.3}"
 REPORT_DIR="${DEPLOY_VERIFICATION_DIR:-artifacts/deploy-verification}"
@@ -17,8 +18,9 @@ IMAGE_REF="${1:-${VAULTSEND_IMAGE:-}}"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/verify-release-image.sh \
-    ghcr.io/mizzz-ivr/vaultsend@sha256:<64桁のdigest>
+  EXPECTED_SOURCE_REVISION=<40桁のmain commit SHA> \
+    bash scripts/verify-release-image.sh \
+      ghcr.io/mizzz-ivr/vaultsend@sha256:<64桁のdigest>
 
 Prerequisites:
   - docker login ghcr.io
@@ -58,6 +60,10 @@ if [[ ! "${image_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
   fail "SHA-256 digest形式が不正です: ${image_digest}"
 fi
 
+if [[ -n "${EXPECTED_SOURCE_REVISION}" && ! "${EXPECTED_SOURCE_REVISION}" =~ ^[0-9a-f]{40}$ ]]; then
+  fail "期待するsource revisionが40桁のcommit SHAではありません: ${EXPECTED_SOURCE_REVISION}"
+fi
+
 for command_name in docker cosign gh jq; do
   require_command "${command_name}"
 done
@@ -69,6 +75,10 @@ mkdir -p "${REPORT_DIR}"
 chmod 700 "${REPORT_DIR}"
 
 printf '%s\n' "${IMAGE_REF}" > "${REPORT_DIR}/requested-image.txt"
+
+if [[ -n "${EXPECTED_SOURCE_REVISION}" ]]; then
+  printf '%s\n' "${EXPECTED_SOURCE_REVISION}" > "${REPORT_DIR}/expected-source-revision.txt"
+fi
 
 echo "GHCRからdigest固定イメージを取得します: ${IMAGE_REF}"
 docker pull "${IMAGE_REF}"
@@ -92,7 +102,11 @@ fi
 if [[ ! "${revision}" =~ ^[0-9a-f]{40}$ ]]; then
   fail "OCI revision labelが40桁のcommit SHAではありません: ${revision}"
 fi
+if [[ -n "${EXPECTED_SOURCE_REVISION}" && "${revision}" != "${EXPECTED_SOURCE_REVISION}" ]]; then
+  fail "OCI revision labelが期待するsource commitと一致しません: expected=${EXPECTED_SOURCE_REVISION} actual=${revision}"
+fi
 
+verified_source_revision="${EXPECTED_SOURCE_REVISION:-${revision}}"
 printf '%s\n' "${revision}" > "${REPORT_DIR}/source-revision.txt"
 
 if ! gh auth status >/dev/null 2>&1; then
@@ -110,13 +124,15 @@ jq -e 'type == "array" and length > 0' \
   "${REPORT_DIR}/cosign-verification.json" >/dev/null \
   || fail "Cosign署名の検証結果が空です"
 
+# GitHub CLIではsigner-workflowとcert-identityが排他的なため、
+# Attestationはsigner workflow、source ref/digest、OIDC issuerで固定する。
+# 完全なcertificate identityは上記Cosign検証で別途確認する。
 attestation_common_args=(
   "oci://${IMAGE_REF}"
   --repo "${EXPECTED_GITHUB_REPOSITORY}"
   --signer-workflow "${EXPECTED_SIGNER_WORKFLOW}"
   --source-ref "${EXPECTED_SOURCE_REF}"
-  --source-digest "${revision}"
-  --cert-identity "${EXPECTED_CERTIFICATE_IDENTITY}"
+  --source-digest "${verified_source_revision}"
   --cert-oidc-issuer "${EXPECTED_OIDC_ISSUER}"
   --deny-self-hosted-runners
   --format json
@@ -146,9 +162,10 @@ cat > "${REPORT_DIR}/verification-summary.json" <<EOF
   "digest": "${image_digest}",
   "source": "${source_url}",
   "revision": "${revision}",
+  "expected_revision": "${verified_source_revision}",
   "source_ref": "${EXPECTED_SOURCE_REF}",
-  "signer_workflow": "${EXPECTED_SIGNER_WORKFLOW}",
-  "certificate_identity": "${EXPECTED_CERTIFICATE_IDENTITY}",
+  "attestation_signer_workflow": "${EXPECTED_SIGNER_WORKFLOW}",
+  "cosign_certificate_identity": "${EXPECTED_CERTIFICATE_IDENTITY}",
   "oidc_issuer": "${EXPECTED_OIDC_ISSUER}",
   "provenance_verified": true,
   "spdx_sbom_verified": true,

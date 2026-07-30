@@ -16,6 +16,7 @@ mkdir -p "${FAKE_BIN}"
 VALID_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 VALID_IMAGE="ghcr.io/mizzz-ivr/vaultsend@${VALID_DIGEST}"
 VALID_REVISION="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+OTHER_VALID_REVISION="cccccccccccccccccccccccccccccccccccccccc"
 
 cat > "${FAKE_BIN}/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -79,6 +80,11 @@ if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then
 fi
 
 if [[ "${1:-}" == "attestation" && "${2:-}" == "verify" ]]; then
+  if [[ " $* " == *" --signer-workflow "* && " $* " == *" --cert-identity "* ]]; then
+    echo "signer-workflowとcert-identityは同時指定できません" >&2
+    exit 2
+  fi
+
   kind="provenance"
   if [[ " $* " == *" --predicate-type "* ]]; then
     kind="sbom"
@@ -101,6 +107,7 @@ base_env=(
   MOCK_IMAGE_REF="${VALID_IMAGE}"
   MOCK_REVISION="${VALID_REVISION}"
   MOCK_COMPOSE_UP_MARKER="${COMPOSE_UP_MARKER}"
+  EXPECTED_SOURCE_REVISION="${VALID_REVISION}"
   VAULTSEND_COMPOSE_FILE="${ROOT_DIR}/deploy/compose/operations.yml"
   VAULTSEND_COMPOSE_ENV_FILE="${ENV_FILE}"
 )
@@ -155,6 +162,11 @@ expect_failure "不正digestを拒否" \
     ghcr.io/mizzz-ivr/vaultsend@sha256:1234
 
 new_case
+expect_failure "期待revision形式不正を拒否" \
+  env "${base_env[@]}" EXPECTED_SOURCE_REVISION=not-a-commit \
+    bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
+
+new_case
 expect_failure "pull失敗時に拒否" \
   env "${base_env[@]}" MOCK_DOCKER_PULL_FAIL=true \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
@@ -167,6 +179,11 @@ expect_failure "source label不一致を拒否" \
 new_case
 expect_failure "revision label不正を拒否" \
   env "${base_env[@]}" MOCK_REVISION=not-a-commit \
+    bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
+
+new_case
+expect_failure "期待source commitとの不一致を拒否" \
+  env "${base_env[@]}" MOCK_REVISION="${OTHER_VALID_REVISION}" \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 new_case
@@ -190,19 +207,25 @@ expect_failure "SPDX SBOM失敗時に拒否" \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 new_case
-expect_success "署名・provenance・SBOMの正常検証" \
+expect_success "期待source commitを含む正常検証" \
   env "${base_env[@]}" bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 jq -e \
   --arg image "${VALID_IMAGE}" \
   --arg revision "${VALID_REVISION}" \
   '.image == $image and .revision == $revision and
+   .expected_revision == $revision and
    .cosign_signature_verified == true and
    .provenance_verified == true and
    .spdx_sbom_verified == true' \
   "${DEPLOY_VERIFICATION_DIR}/verification-summary.json" >/dev/null
 [[ "$(grep -c '^gh attestation verify ' "${COMMAND_LOG}")" -eq 2 ]]
 [[ "$(grep -c '^cosign verify ' "${COMMAND_LOG}")" -eq 1 ]]
+! grep -q -- '--cert-identity' "${COMMAND_LOG}" || {
+  echo "FAIL: GitHub Attestation検証へcert-identityが再追加されています" >&2
+  exit 1
+}
+grep -q -- '--signer-workflow mizzz-ivr/vaultsend/.github/workflows/supply-chain.yml' "${COMMAND_LOG}"
 
 new_case
 expect_success "--checkではComposeを起動しない" \

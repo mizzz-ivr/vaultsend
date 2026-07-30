@@ -9,4 +9,5 @@
 /scripts/test-verified-compose-deployment.sh @mizzz-ivr
 /docs/software-supply-chain-security-ja.md @mizzz-ivr
 /docs/operations-observability-ja.md @mizzz-ivr
+/docs/release-image-acceptance-ja.md @mizzz-ivr
 /deploy/ @mizzz-ivr
