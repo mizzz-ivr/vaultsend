@@ -16,6 +16,7 @@ mkdir -p "${FAKE_BIN}"
 VALID_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 VALID_IMAGE="ghcr.io/mizzz-ivr/vaultsend@${VALID_DIGEST}"
 VALID_REVISION="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+OTHER_VALID_REVISION="cccccccccccccccccccccccccccccccccccccccc"
 
 cat > "${FAKE_BIN}/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -101,6 +102,7 @@ base_env=(
   MOCK_IMAGE_REF="${VALID_IMAGE}"
   MOCK_REVISION="${VALID_REVISION}"
   MOCK_COMPOSE_UP_MARKER="${COMPOSE_UP_MARKER}"
+  EXPECTED_SOURCE_REVISION="${VALID_REVISION}"
   VAULTSEND_COMPOSE_FILE="${ROOT_DIR}/deploy/compose/operations.yml"
   VAULTSEND_COMPOSE_ENV_FILE="${ENV_FILE}"
 )
@@ -155,6 +157,11 @@ expect_failure "不正digestを拒否" \
     ghcr.io/mizzz-ivr/vaultsend@sha256:1234
 
 new_case
+expect_failure "期待revision形式不正を拒否" \
+  env "${base_env[@]}" EXPECTED_SOURCE_REVISION=not-a-commit \
+    bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
+
+new_case
 expect_failure "pull失敗時に拒否" \
   env "${base_env[@]}" MOCK_DOCKER_PULL_FAIL=true \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
@@ -167,6 +174,11 @@ expect_failure "source label不一致を拒否" \
 new_case
 expect_failure "revision label不正を拒否" \
   env "${base_env[@]}" MOCK_REVISION=not-a-commit \
+    bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
+
+new_case
+expect_failure "期待source commitとの不一致を拒否" \
+  env "${base_env[@]}" MOCK_REVISION="${OTHER_VALID_REVISION}" \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 new_case
@@ -190,13 +202,14 @@ expect_failure "SPDX SBOM失敗時に拒否" \
     bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 new_case
-expect_success "署名・provenance・SBOMの正常検証" \
+expect_success "期待source commitを含む正常検証" \
   env "${base_env[@]}" bash "${ROOT_DIR}/scripts/verify-release-image.sh" "${VALID_IMAGE}"
 
 jq -e \
   --arg image "${VALID_IMAGE}" \
   --arg revision "${VALID_REVISION}" \
   '.image == $image and .revision == $revision and
+   .expected_revision == $revision and
    .cosign_signature_verified == true and
    .provenance_verified == true and
    .spdx_sbom_verified == true' \
