@@ -126,19 +126,24 @@ jobs:
 
       - name: 事前検証結果をJob Summaryへ記録
         shell: bash
+        env:
+          SUMMARY_CHANGE_REQUEST_ID: ${{ inputs.change_request_id }}
+          SUMMARY_IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          SUMMARY_SOURCE_REVISION: ${{ steps.release.outputs.source_revision }}
+          SUMMARY_REASON_SHA256: ${{ steps.request.outputs.reason_sha256 }}
         run: |
           {
             echo '## 本番デプロイ許可申請'
             echo
             echo '| 項目 | 値 |'
             echo '|---|---|'
-            echo "| 変更管理番号 | \`${{ inputs.change_request_id }}\` |"
+            echo "| 変更管理番号 | \`${SUMMARY_CHANGE_REQUEST_ID}\` |"
             echo "| 起動者 | \`${GITHUB_ACTOR}\` |"
-            echo "| Image | \`${{ steps.release.outputs.image_ref }}\` |"
-            echo "| Revision | \`${{ steps.release.outputs.source_revision }}\` |"
-            echo "| 理由SHA-256 | \`${{ steps.request.outputs.reason_sha256 }}\` |"
+            echo "| Image | \`${SUMMARY_IMAGE_REF}\` |"
+            echo "| Revision | \`${SUMMARY_SOURCE_REVISION}\` |"
+            echo "| 理由SHA-256 | \`${SUMMARY_REASON_SHA256}\` |"
             echo
-            echo '`production` Environmentの承認後、同じdigestを再検証して2時間有効なAttestation付き許可証を発行します。'
+            echo "\`production\` Environmentの承認後、同じdigestを再検証して2時間有効なAttestation付き許可証を発行します。"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 承認前の検証証跡を保存
@@ -238,11 +243,12 @@ jobs:
         shell: bash
         env:
           EXPECTED_SOURCE_REVISION: ${{ needs.prepare.outputs.source_revision }}
+          EXPECTED_IMAGE_REF: ${{ needs.prepare.outputs.image_ref }}
           RELEASE_RESOLUTION_DIR: artifacts/production-deployment/authorization/release
         run: |
           bash scripts/resolve-current-release-image.sh
           current_image="$(jq -r '.image' artifacts/production-deployment/authorization/release/release-resolution.json)"
-          if [[ "${current_image}" != "${{ needs.prepare.outputs.image_ref }}" ]]; then
+          if [[ "${current_image}" != "${EXPECTED_IMAGE_REF}" ]]; then
             echo "承認待ちの間に公開イメージが変更されました: ${current_image}" >&2
             exit 1
           fi
@@ -267,6 +273,7 @@ jobs:
           IMAGE_REF: ${{ needs.prepare.outputs.image_ref }}
           SOURCE_REVISION: ${{ needs.prepare.outputs.source_revision }}
           REASON_SHA256: ${{ needs.prepare.outputs.reason_sha256 }}
+          CHANGE_REQUEST_ID_VALUE: ${{ inputs.change_request_id }}
         run: |
           set -Eeuo pipefail
           authorization_dir='artifacts/production-deployment/authorization'
@@ -282,7 +289,7 @@ jobs:
             --arg environment 'production' \
             --arg image "${IMAGE_REF}" \
             --arg source_revision "${SOURCE_REVISION}" \
-            --arg change_request_id "${{ inputs.change_request_id }}" \
+            --arg change_request_id "${CHANGE_REQUEST_ID_VALUE}" \
             --arg deployment_reason_sha256 "${REASON_SHA256}" \
             --arg requested_by "${GITHUB_ACTOR}" \
             --arg repository "${GITHUB_REPOSITORY}" \
