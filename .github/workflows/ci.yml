@@ -83,7 +83,7 @@ jobs:
 
       - name: Go失敗ログを保存
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-go-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .ci-logs/go
@@ -149,7 +149,7 @@ jobs:
 
       - name: PostgreSQL失敗ログを保存
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-postgres-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: .ci-logs/postgres
@@ -213,7 +213,7 @@ jobs:
 
       - name: Web失敗ログを保存
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-web-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: web/.ci-logs/web
@@ -270,7 +270,7 @@ jobs:
 
       - name: E2E失敗ログ・traceを保存
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-e2e-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
