@@ -65,7 +65,7 @@ if [[ ! "${MAX_AUTHORIZATION_TTL_SEC}" =~ ^[0-9]+$ || "${MAX_AUTHORIZATION_TTL_S
   fail "許可証の最大TTL設定が不正です: ${MAX_AUTHORIZATION_TTL_SEC}"
 fi
 
-for command_name in awk cosign cp date docker gh id jq mkdir mv rmdir sha256sum; do
+for command_name in awk cosign cp date docker gh id jq mkdir mv rm rmdir sha256sum; do
   require_command "${command_name}"
 done
 
@@ -89,7 +89,7 @@ change_request_id="$(jq -er '.change_request_id // empty' "${manifest_abs}")" ||
 reason_sha256="$(jq -er '.deployment_reason_sha256 // empty' "${manifest_abs}")" || fail "deployment_reason_sha256を取得できません"
 workflow_repository="$(jq -er '.workflow.repository // empty' "${manifest_abs}")" || fail "workflow.repositoryを取得できません"
 workflow_ref="$(jq -er '.workflow.ref // empty' "${manifest_abs}")" || fail "workflow.refを取得できません"
-workflow_sha="$(jq -er '.workflow.sha // empty' "${manifest_abs}")" || fail "workflow.shaを取得できません"
+workflow_sha="$(jq -er '.workflow.sha // empty' "${manifest_abs}")" || fail "workflow SHAを取得できません"
 workflow_run_id="$(jq -er '.workflow.run_id // empty' "${manifest_abs}")" || fail "workflow.run_idを取得できません"
 workflow_run_attempt="$(jq -er '.workflow.run_attempt // empty' "${manifest_abs}")" || fail "workflow.run_attemptを取得できません"
 authorized_at_epoch="$(jq -er '.authorized_at_epoch // empty' "${manifest_abs}")" || fail "authorized_at_epochを取得できません"
@@ -213,14 +213,15 @@ chmod 600 "${started_record}"
 bash "${ROOT_DIR}/scripts/deploy-verified-compose.sh" --deploy "${image_ref}"
 
 deployed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+used_tmp="${used_record}.tmp"
 jq \
   --arg status "used" \
   --arg deployed_at "${deployed_at}" \
   '.status = $status | .deployed_at = $deployed_at' \
-  "${started_record}" > "${used_record}"
-chmod 600 "${used_record}"
-mv -f "${used_record}" "${started_record}"
-mv -f "${started_record}" "${used_record}"
+  "${started_record}" > "${used_tmp}"
+chmod 600 "${used_tmp}"
+mv "${used_tmp}" "${used_record}"
+rm -f "${started_record}"
 
 cp "${used_record}" "${RESULT_DIR}/authorization-use-record.json"
 cleanup_lock
