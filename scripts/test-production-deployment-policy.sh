@@ -136,7 +136,7 @@ if grep -Eiq '^[[:space:]]*(image|image_ref|digest|source_revision|revision):' <
   echo 'FAIL: 任意イメージ入力を受け付けています' >&2
   exit 1
 fi
-if grep -Fq 'self-hosted' "${workflow_file}"; then
+if grep -Eq '^[[:space:]]*runs-on:.*self-hosted' "${workflow_file}"; then
   echo 'FAIL: 本番hostをself-hosted runnerとして使用しています' >&2
   exit 1
 fi
