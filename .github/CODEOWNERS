@@ -7,9 +7,11 @@
 /scripts/resolve-current-release-image.sh @mizzz-ivr
 /scripts/verify-release-image.sh @mizzz-ivr
 /scripts/deploy-verified-compose.sh @mizzz-ivr
+/scripts/deploy-approved-production.sh @mizzz-ivr
 /scripts/validate-production-deployment-request.sh @mizzz-ivr
 /scripts/test-verified-compose-deployment.sh @mizzz-ivr
 /scripts/test-production-deployment-policy.sh @mizzz-ivr
+/scripts/test-approved-production-deployment.sh @mizzz-ivr
 /docs/software-supply-chain-security-ja.md @mizzz-ivr
 /docs/operations-observability-ja.md @mizzz-ivr
 /docs/release-image-acceptance-ja.md @mizzz-ivr
