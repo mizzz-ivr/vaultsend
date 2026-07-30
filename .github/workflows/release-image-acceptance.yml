@@ -101,7 +101,7 @@ jobs:
           else
             git fetch --no-tags origin main:refs/remotes/origin/main
             expected_revision="$(
-              git rev-list -1 origin/main -- \
+              git rev-list --first-parent -1 origin/main -- \
                 Dockerfile \
                 .dockerignore \
                 .gitignore \
