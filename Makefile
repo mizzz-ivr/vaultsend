@@ -1,7 +1,7 @@
 APP_NAME := vaultsend-api
 DB_URL ?= postgres://vaultsend:vaultsend@localhost:5432/vaultsend?sslmode=disable
 
-.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain verify-release-image check-operations-deploy deploy-operations test-production-deployment-policy
+.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain verify-release-image check-operations-deploy deploy-operations test-production-deployment-policy check-approved-production deploy-approved-production
 
 run:
 	go run ./cmd/api
@@ -77,3 +77,14 @@ deploy-operations:
 
 test-production-deployment-policy:
 	bash scripts/test-production-deployment-policy.sh
+	bash scripts/test-approved-production-deployment.sh
+
+check-approved-production:
+	@test -n "$(PRODUCTION_AUTHORIZATION_MANIFEST)" || (echo "PRODUCTION_AUTHORIZATION_MANIFESTに許可manifestを指定してください" >&2; exit 1)
+	bash scripts/deploy-approved-production.sh --check "$(PRODUCTION_AUTHORIZATION_MANIFEST)"
+
+deploy-approved-production:
+	@test -n "$(PRODUCTION_AUTHORIZATION_MANIFEST)" || (echo "PRODUCTION_AUTHORIZATION_MANIFESTに許可manifestを指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_AUTHORIZATION_LEDGER_DIR)" || (echo "PRODUCTION_AUTHORIZATION_LEDGER_DIRに永続台帳ディレクトリを指定してください" >&2; exit 1)
+	PRODUCTION_AUTHORIZATION_LEDGER_DIR="$(PRODUCTION_AUTHORIZATION_LEDGER_DIR)" \
+		bash scripts/deploy-approved-production.sh --deploy "$(PRODUCTION_AUTHORIZATION_MANIFEST)"
