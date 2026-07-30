@@ -67,7 +67,6 @@ reason_sha256="$(printf '%s' "${DEPLOYMENT_REASON}" | sha256sum | awk '{print $1
 
 jq -n \
   --arg change_request_id "${CHANGE_REQUEST_ID}" \
-  --arg deployment_reason "${DEPLOYMENT_REASON}" \
   --arg reason_sha256 "${reason_sha256}" \
   --arg requested_by "${REQUESTED_BY}" \
   --arg requested_ref "${REQUESTED_REF}" \
@@ -77,7 +76,6 @@ jq -n \
   --arg requested_at "${requested_at}" \
   '{
     change_request_id: $change_request_id,
-    deployment_reason: $deployment_reason,
     deployment_reason_sha256: $reason_sha256,
     requested_by: $requested_by,
     requested_ref: $requested_ref,
@@ -89,7 +87,10 @@ jq -n \
   }' > "${REQUEST_DIR}/request.json"
 
 jq -e \
-  '.confirmation_verified == true and .requested_ref == "refs/heads/main"' \
+  '.confirmation_verified == true and
+   .requested_ref == "refs/heads/main" and
+   (.deployment_reason_sha256 | length) == 64 and
+   (has("deployment_reason") | not)' \
   "${REQUEST_DIR}/request.json" >/dev/null
 
 echo "本番デプロイ要求の入力検証に成功しました: ${CHANGE_REQUEST_ID}"
