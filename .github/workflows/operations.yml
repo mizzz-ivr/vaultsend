@@ -13,10 +13,15 @@ on:
       - internal/config/**
       - deploy/**
       - scripts/verify-operations-config.sh
+      - scripts/resolve-current-release-image.sh
       - scripts/verify-release-image.sh
       - scripts/deploy-verified-compose.sh
+      - scripts/validate-production-deployment-request.sh
       - scripts/test-verified-compose-deployment.sh
+      - scripts/test-production-deployment-policy.sh
       - .github/workflows/operations.yml
+      - .github/workflows/release-image-acceptance.yml
+      - .github/workflows/production-deploy.yml
   push:
     branches:
       - main
@@ -29,10 +34,15 @@ on:
       - internal/config/**
       - deploy/**
       - scripts/verify-operations-config.sh
+      - scripts/resolve-current-release-image.sh
       - scripts/verify-release-image.sh
       - scripts/deploy-verified-compose.sh
+      - scripts/validate-production-deployment-request.sh
       - scripts/test-verified-compose-deployment.sh
+      - scripts/test-production-deployment-policy.sh
       - .github/workflows/operations.yml
+      - .github/workflows/release-image-acceptance.yml
+      - .github/workflows/production-deploy.yml
   workflow_dispatch:
 
 permissions:
@@ -69,11 +79,17 @@ jobs:
         run: |
           set -o pipefail
           bash -n \
+            scripts/verify-operations-config.sh \
+            scripts/resolve-current-release-image.sh \
             scripts/verify-release-image.sh \
             scripts/deploy-verified-compose.sh \
-            scripts/test-verified-compose-deployment.sh
+            scripts/validate-production-deployment-request.sh \
+            scripts/test-verified-compose-deployment.sh \
+            scripts/test-production-deployment-policy.sh
           bash scripts/test-verified-compose-deployment.sh \
             2>&1 | tee .ci-logs/operations/deploy-gate-test.log
+          bash scripts/test-production-deployment-policy.sh \
+            2>&1 | tee .ci-logs/operations/production-deployment-policy-test.log
 
       - name: コンテナと監視設定を検証
         shell: bash
