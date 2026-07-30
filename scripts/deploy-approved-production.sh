@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---check}"
 MANIFEST_PATH="${2:-${PRODUCTION_AUTHORIZATION_MANIFEST:-}}"
 EXPECTED_GITHUB_REPOSITORY="${EXPECTED_GITHUB_REPOSITORY:-mizzz-ivr/vaultsend}"
+EXPECTED_IMAGE_REPOSITORY="${EXPECTED_IMAGE_REPOSITORY:-ghcr.io/mizzz-ivr/vaultsend}"
 EXPECTED_SIGNER_WORKFLOW="${EXPECTED_PRODUCTION_SIGNER_WORKFLOW:-mizzz-ivr/vaultsend/.github/workflows/production-deploy.yml}"
 EXPECTED_WORKFLOW_REF="${EXPECTED_PRODUCTION_WORKFLOW_REF:-mizzz-ivr/vaultsend/.github/workflows/production-deploy.yml@refs/heads/main}"
 EXPECTED_SOURCE_REF="${EXPECTED_PRODUCTION_SOURCE_REF:-refs/heads/main}"
@@ -64,7 +65,7 @@ if [[ ! "${MAX_AUTHORIZATION_TTL_SEC}" =~ ^[0-9]+$ || "${MAX_AUTHORIZATION_TTL_S
   fail "許可証の最大TTL設定が不正です: ${MAX_AUTHORIZATION_TTL_SEC}"
 fi
 
-for command_name in date docker gh jq sha256sum; do
+for command_name in awk cosign cp date docker gh id jq mkdir mv rmdir sha256sum; do
   require_command "${command_name}"
 done
 
@@ -99,7 +100,8 @@ expires_at_epoch="$(jq -er '.expires_at_epoch // empty' "${manifest_abs}")" || f
 [[ "${environment_name}" == "production" ]] || fail "許可環境がproductionではありません: ${environment_name}"
 [[ "${workflow_repository}" == "${EXPECTED_GITHUB_REPOSITORY}" ]] || fail "workflow repositoryが期待値と一致しません: ${workflow_repository}"
 [[ "${workflow_ref}" == "${EXPECTED_WORKFLOW_REF}" ]] || fail "workflow refが期待値と一致しません: ${workflow_ref}"
-[[ "${image_ref}" =~ ^ghcr\.io/mizzz-ivr/vaultsend@sha256:[0-9a-f]{64}$ ]] || fail "許可イメージ形式が不正です: ${image_ref}"
+[[ "${image_ref}" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] || fail "許可イメージ形式が不正です: ${image_ref}"
+[[ "${image_ref%@*}" == "${EXPECTED_IMAGE_REPOSITORY}" ]] || fail "許可イメージrepositoryが期待値と一致しません: ${image_ref%@*}"
 [[ "${source_revision}" =~ ^[0-9a-f]{40}$ ]] || fail "source revision形式が不正です: ${source_revision}"
 [[ "${workflow_sha}" =~ ^[0-9a-f]{40}$ ]] || fail "workflow SHA形式が不正です: ${workflow_sha}"
 [[ "${workflow_run_id}" =~ ^[0-9]+$ && "${workflow_run_attempt}" =~ ^[0-9]+$ ]] || fail "Workflow run情報が不正です"
@@ -172,41 +174,53 @@ fi
 mkdir -p "${LEDGER_DIR}"
 chmod 700 "${LEDGER_DIR}"
 
+started_record="${LEDGER_DIR}/${manifest_sha256}.started.json"
 used_record="${LEDGER_DIR}/${manifest_sha256}.used.json"
 lock_dir="${LEDGER_DIR}/${manifest_sha256}.lock"
-[[ ! -e "${used_record}" ]] || fail "このデプロイ許可証は使用済みです"
+[[ ! -e "${started_record}" && ! -e "${used_record}" ]] \
+  || fail "このデプロイ許可証は使用済み、または過去に使用開始されています"
 mkdir "${lock_dir}" 2>/dev/null || fail "このデプロイ許可証は別処理で使用中です"
 cleanup_lock() {
   rmdir "${lock_dir}" 2>/dev/null || true
 }
 trap cleanup_lock EXIT
 
-bash "${ROOT_DIR}/scripts/deploy-verified-compose.sh" --deploy "${image_ref}"
-
-deployed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-deployed_by="$(id -un)"
-
+started_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+started_by="$(id -un)"
 jq -n \
+  --arg status "started" \
   --arg manifest_sha256 "${manifest_sha256}" \
   --arg image "${image_ref}" \
   --arg source_revision "${source_revision}" \
   --arg change_request_id "${change_request_id}" \
   --arg workflow_run_id "${workflow_run_id}" \
   --arg workflow_run_attempt "${workflow_run_attempt}" \
-  --arg deployed_by "${deployed_by}" \
-  --arg deployed_at "${deployed_at}" \
+  --arg started_by "${started_by}" \
+  --arg started_at "${started_at}" \
   '{
-    status: "used",
+    status: $status,
     authorization_manifest_sha256: $manifest_sha256,
     image: $image,
     source_revision: $source_revision,
     change_request_id: $change_request_id,
     workflow_run_id: $workflow_run_id,
     workflow_run_attempt: $workflow_run_attempt,
-    deployed_by: $deployed_by,
-    deployed_at: $deployed_at
-  }' > "${used_record}"
+    started_by: $started_by,
+    started_at: $started_at
+  }' > "${started_record}"
+chmod 600 "${started_record}"
+
+bash "${ROOT_DIR}/scripts/deploy-verified-compose.sh" --deploy "${image_ref}"
+
+deployed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+jq \
+  --arg status "used" \
+  --arg deployed_at "${deployed_at}" \
+  '.status = $status | .deployed_at = $deployed_at' \
+  "${started_record}" > "${used_record}"
 chmod 600 "${used_record}"
+mv -f "${used_record}" "${started_record}"
+mv -f "${started_record}" "${used_record}"
 
 cp "${used_record}" "${RESULT_DIR}/authorization-use-record.json"
 cleanup_lock
