@@ -95,12 +95,19 @@ jobs:
           GOTOOLCHAIN: auto
         run: |
           set -o pipefail
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+          actionlint_package='github.com/rhysd/actionlint/cmd/actionlint@v1.7.12'
+          go run "${actionlint_package}" \
             .github/workflows/operations.yml \
             .github/workflows/release-image-acceptance.yml \
             .github/workflows/production-deploy.yml \
-            .github/workflows/production-rollback.yml \
             2>&1 | tee .ci-logs/operations/actionlint.log
+
+          # production-rollback.ymlでは、単一引用符内の$request等をjq変数として
+          # 意図的に使用するため、このファイルのSC2016だけを限定除外する。
+          go run "${actionlint_package}" \
+            -ignore 'SC2016' \
+            .github/workflows/production-rollback.yml \
+            2>&1 | tee -a .ci-logs/operations/actionlint.log
 
       - name: デプロイ・ロールバックゲートの構文とmock動作を検証
         shell: bash
