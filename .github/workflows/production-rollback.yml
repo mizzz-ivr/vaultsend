@@ -143,6 +143,8 @@ jobs:
       - name: 承認対象manifestを生成
         shell: bash
         run: |
+          # jqの$request等はshell変数ではなく--slurpfileで定義したjq変数。
+          # shellcheck disable=SC2016
           jq -n \
             --slurpfile request artifacts/production-rollback/preflight/request/request.json \
             --slurpfile current artifacts/production-rollback/preflight/current-verification/verification-summary.json \
@@ -193,7 +195,7 @@ jobs:
 
       - name: 承認前の検証証跡を保存
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-rollback-preflight-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/production-rollback/preflight
@@ -340,6 +342,8 @@ jobs:
           authorized_at="$(date -u -d "@${authorized_at_epoch}" +'%Y-%m-%dT%H:%M:%SZ')"
           expires_at="$(date -u -d "@${expires_at_epoch}" +'%Y-%m-%dT%H:%M:%SZ')"
 
+          # jqの$current_image等は--argで定義したjq変数。
+          # shellcheck disable=SC2016
           jq -n \
             --arg current_image "${CURRENT_IMAGE}" \
             --arg current_revision "${CURRENT_REVISION}" \
@@ -455,7 +459,7 @@ jobs:
 
       - name: Attestation付き本番ロールバック許可証を保存
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-rollback-authorization-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/production-rollback/authorization
