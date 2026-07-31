@@ -146,10 +146,11 @@ blob-report/
 # CI diagnostic logs
 .ci-logs/
 
-# Supply Chain verification output
+# Supply Chain・deployment verification output
 .trivy-cache/
 artifacts/supply-chain/
 artifacts/deploy-verification/
 artifacts/release-acceptance/
 artifacts/release-resolution/
 artifacts/production-deployment/
+artifacts/production-rollback/
