@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - scripts/resolve-current-release-image.sh
       - scripts/verify-release-image.sh
       - scripts/test-verified-compose-deployment.sh
       - .github/workflows/release-image-acceptance.yml
@@ -52,12 +53,14 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: 検証scriptの構文とmock動作を確認
         shell: bash
         run: |
           set -Eeuo pipefail
           bash -n \
+            scripts/resolve-current-release-image.sh \
             scripts/verify-release-image.sh \
             scripts/deploy-verified-compose.sh \
             scripts/test-verified-compose-deployment.sh
@@ -76,54 +79,12 @@ jobs:
         id: release
         shell: bash
         env:
-          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EXPECTED_SOURCE_REVISION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+          RELEASE_RESOLUTION_DIR: artifacts/release-acceptance/release
         run: |
-          set -Eeuo pipefail
-
-          image_tag="${EXPECTED_IMAGE_REPOSITORY}:main"
-          docker pull "${image_tag}"
-
-          repo_digests_json="$(docker image inspect --format '{{json .RepoDigests}}' "${image_tag}")"
-          image_ref="$(
-            jq -er \
-              --arg prefix "${EXPECTED_IMAGE_REPOSITORY}@" \
-              '[.[] | select(startswith($prefix))][0] // empty' \
-              <<<"${repo_digests_json}"
-          )"
-
-          if [[ ! "${image_ref}" =~ ^ghcr\.io/mizzz-ivr/vaultsend@sha256:[0-9a-f]{64}$ ]]; then
-            echo "mainタグを正規のdigest参照へ解決できませんでした: ${image_ref}" >&2
-            exit 1
-          fi
-
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
-            expected_revision="${WORKFLOW_RUN_HEAD_SHA}"
-          else
-            git fetch --no-tags origin main:refs/remotes/origin/main
-            expected_revision="$(
-              git rev-list --first-parent -1 origin/main -- \
-                Dockerfile \
-                .dockerignore \
-                .gitignore \
-                go.mod \
-                go.sum \
-                cmd \
-                internal \
-                web/package.json \
-                web/package-lock.json \
-                scripts/verify-supply-chain.sh \
-                .github/workflows/supply-chain.yml \
-                .github/dependabot.yml
-            )"
-          fi
-
-          if [[ ! "${expected_revision}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "期待する公開対象commitを解決できませんでした: ${expected_revision}" >&2
-            exit 1
-          fi
-
-          printf '%s\n' "${image_ref}" | tee release-image-reference.txt
-          printf '%s\n' "${expected_revision}" | tee release-expected-revision.txt
+          bash scripts/resolve-current-release-image.sh
+          image_ref="$(jq -r '.image' artifacts/release-acceptance/release/release-resolution.json)"
+          expected_revision="$(jq -r '.expected_revision' artifacts/release-acceptance/release/release-resolution.json)"
           echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
           echo "expected_revision=${expected_revision}" >> "${GITHUB_OUTPUT}"
 
@@ -136,7 +97,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VAULTSEND_IMAGE: ${{ steps.release.outputs.image_ref }}
           EXPECTED_SOURCE_REVISION: ${{ steps.release.outputs.expected_revision }}
-          DEPLOY_VERIFICATION_DIR: artifacts/release-acceptance
+          DEPLOY_VERIFICATION_DIR: artifacts/release-acceptance/verification
         run: bash scripts/verify-release-image.sh
 
       - name: 検証結果をJob Summaryへ記録
@@ -154,7 +115,7 @@ jobs:
               "| Cosign | \(.cosign_signature_verified) |\n" +
               "| Provenance | \(.provenance_verified) |\n" +
               "| SPDX SBOM | \(.spdx_sbom_verified) |"
-            ' artifacts/release-acceptance/verification-summary.json
+            ' artifacts/release-acceptance/verification/verification-summary.json
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: 検証証跡を保存
@@ -162,9 +123,6 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: release-image-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            artifacts/release-acceptance
-            release-image-reference.txt
-            release-expected-revision.txt
+          path: artifacts/release-acceptance
           if-no-files-found: warn
           retention-days: 90
