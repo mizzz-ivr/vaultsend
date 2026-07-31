@@ -1,7 +1,7 @@
 APP_NAME := vaultsend-api
 DB_URL ?= postgres://vaultsend:vaultsend@localhost:5432/vaultsend?sslmode=disable
 
-.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain verify-release-image check-operations-deploy deploy-operations test-production-deployment-policy check-approved-production deploy-approved-production
+.PHONY: run run-worker run-cleanup-worker run-audit-worker web-install web-run web-lint web-typecheck web-build web-e2e test test-integration lint migrate-up migrate-down verify-migrations sqlc-generate container-build verify-operations verify-supply-chain verify-release-image check-operations-deploy deploy-operations test-production-deployment-policy check-production-release-ledger check-approved-production deploy-approved-production check-approved-rollback rollback-approved-production
 
 run:
 	go run ./cmd/api
@@ -78,6 +78,11 @@ deploy-operations:
 test-production-deployment-policy:
 	bash scripts/test-production-deployment-policy.sh
 	bash scripts/test-approved-production-deployment.sh
+	bash scripts/test-approved-production-rollback.sh
+
+check-production-release-ledger:
+	@test -n "$(PRODUCTION_RELEASE_LEDGER_DIR)" || (echo "PRODUCTION_RELEASE_LEDGER_DIRに永続release台帳を指定してください" >&2; exit 1)
+	bash scripts/manage-production-release-ledger.sh validate "$(PRODUCTION_RELEASE_LEDGER_DIR)"
 
 check-approved-production:
 	@test -n "$(PRODUCTION_AUTHORIZATION_MANIFEST)" || (echo "PRODUCTION_AUTHORIZATION_MANIFESTに許可manifestを指定してください" >&2; exit 1)
@@ -85,6 +90,22 @@ check-approved-production:
 
 deploy-approved-production:
 	@test -n "$(PRODUCTION_AUTHORIZATION_MANIFEST)" || (echo "PRODUCTION_AUTHORIZATION_MANIFESTに許可manifestを指定してください" >&2; exit 1)
-	@test -n "$(PRODUCTION_AUTHORIZATION_LEDGER_DIR)" || (echo "PRODUCTION_AUTHORIZATION_LEDGER_DIRに永続台帳ディレクトリを指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_AUTHORIZATION_LEDGER_DIR)" || (echo "PRODUCTION_AUTHORIZATION_LEDGER_DIRに永続許可証台帳を指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_RELEASE_LEDGER_DIR)" || (echo "PRODUCTION_RELEASE_LEDGER_DIRに永続release台帳を指定してください" >&2; exit 1)
 	PRODUCTION_AUTHORIZATION_LEDGER_DIR="$(PRODUCTION_AUTHORIZATION_LEDGER_DIR)" \
+	PRODUCTION_RELEASE_LEDGER_DIR="$(PRODUCTION_RELEASE_LEDGER_DIR)" \
 		bash scripts/deploy-approved-production.sh --deploy "$(PRODUCTION_AUTHORIZATION_MANIFEST)"
+
+check-approved-rollback:
+	@test -n "$(PRODUCTION_ROLLBACK_MANIFEST)" || (echo "PRODUCTION_ROLLBACK_MANIFESTにロールバック許可manifestを指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_RELEASE_LEDGER_DIR)" || (echo "PRODUCTION_RELEASE_LEDGER_DIRに永続release台帳を指定してください" >&2; exit 1)
+	PRODUCTION_RELEASE_LEDGER_DIR="$(PRODUCTION_RELEASE_LEDGER_DIR)" \
+		bash scripts/rollback-approved-production.sh --check "$(PRODUCTION_ROLLBACK_MANIFEST)"
+
+rollback-approved-production:
+	@test -n "$(PRODUCTION_ROLLBACK_MANIFEST)" || (echo "PRODUCTION_ROLLBACK_MANIFESTにロールバック許可manifestを指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_RELEASE_LEDGER_DIR)" || (echo "PRODUCTION_RELEASE_LEDGER_DIRに永続release台帳を指定してください" >&2; exit 1)
+	@test -n "$(PRODUCTION_ROLLBACK_AUTHORIZATION_LEDGER_DIR)" || (echo "PRODUCTION_ROLLBACK_AUTHORIZATION_LEDGER_DIRに永続ロールバック許可証台帳を指定してください" >&2; exit 1)
+	PRODUCTION_RELEASE_LEDGER_DIR="$(PRODUCTION_RELEASE_LEDGER_DIR)" \
+	PRODUCTION_ROLLBACK_AUTHORIZATION_LEDGER_DIR="$(PRODUCTION_ROLLBACK_AUTHORIZATION_LEDGER_DIR)" \
+		bash scripts/rollback-approved-production.sh --deploy "$(PRODUCTION_ROLLBACK_MANIFEST)"
