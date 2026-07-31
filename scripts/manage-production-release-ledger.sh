@@ -29,7 +29,7 @@ require_command() {
     || fail "必要なコマンドが見つかりません: ${command_name}"
 }
 
-for command_name in chmod cp find jq mkdir mktemp mv readlink; do
+for command_name in cat chmod cp find jq mkdir mktemp mv sort; do
   require_command "${command_name}"
 done
 
