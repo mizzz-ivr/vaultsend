@@ -82,6 +82,7 @@ validate_ledger() {
   initialize_ledger
 
   local event_files=()
+  local event_file
   while IFS= read -r -d '' event_file; do
     [[ ! -L "${event_file}" ]] || fail "event fileにsymbolic linkは使用できません: ${event_file}"
     validate_release_object "${event_file}"
