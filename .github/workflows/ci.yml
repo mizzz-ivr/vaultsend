@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: リポジトリを取得
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Goをセットアップ
         uses: actions/setup-go@v7
@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: リポジトリを取得
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Goをセットアップ
         uses: actions/setup-go@v7
@@ -167,7 +167,7 @@ jobs:
 
     steps:
       - name: リポジトリを取得
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Node.jsをセットアップ
         uses: actions/setup-node@v7
@@ -232,7 +232,7 @@ jobs:
 
     steps:
       - name: リポジトリを取得
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Node.jsをセットアップ
         uses: actions/setup-node@v7
