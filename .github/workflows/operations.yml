@@ -16,14 +16,19 @@ on:
       - scripts/resolve-current-release-image.sh
       - scripts/verify-release-image.sh
       - scripts/deploy-verified-compose.sh
+      - scripts/manage-production-release-ledger.sh
       - scripts/deploy-approved-production.sh
+      - scripts/rollback-approved-production.sh
       - scripts/validate-production-deployment-request.sh
+      - scripts/validate-production-rollback-request.sh
       - scripts/test-verified-compose-deployment.sh
       - scripts/test-production-deployment-policy.sh
       - scripts/test-approved-production-deployment.sh
+      - scripts/test-approved-production-rollback.sh
       - .github/workflows/operations.yml
       - .github/workflows/release-image-acceptance.yml
       - .github/workflows/production-deploy.yml
+      - .github/workflows/production-rollback.yml
   push:
     branches:
       - main
@@ -39,14 +44,19 @@ on:
       - scripts/resolve-current-release-image.sh
       - scripts/verify-release-image.sh
       - scripts/deploy-verified-compose.sh
+      - scripts/manage-production-release-ledger.sh
       - scripts/deploy-approved-production.sh
+      - scripts/rollback-approved-production.sh
       - scripts/validate-production-deployment-request.sh
+      - scripts/validate-production-rollback-request.sh
       - scripts/test-verified-compose-deployment.sh
       - scripts/test-production-deployment-policy.sh
       - scripts/test-approved-production-deployment.sh
+      - scripts/test-approved-production-rollback.sh
       - .github/workflows/operations.yml
       - .github/workflows/release-image-acceptance.yml
       - .github/workflows/production-deploy.yml
+      - .github/workflows/production-rollback.yml
   workflow_dispatch:
 
 permissions:
@@ -60,7 +70,7 @@ jobs:
   verify:
     name: Container・Compose・Monitoring・Deploy Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: リポジトリを取得
@@ -85,13 +95,21 @@ jobs:
           GOTOOLCHAIN: auto
         run: |
           set -o pipefail
-          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 \
+          actionlint_package='github.com/rhysd/actionlint/cmd/actionlint@v1.7.12'
+          go run "${actionlint_package}" \
             .github/workflows/operations.yml \
             .github/workflows/release-image-acceptance.yml \
             .github/workflows/production-deploy.yml \
             2>&1 | tee .ci-logs/operations/actionlint.log
 
-      - name: デプロイ前ゲートの構文とmock動作を検証
+          # production-rollback.ymlでは、単一引用符内の$request等をjq変数として
+          # 意図的に使用するため、このファイルのSC2016だけを限定除外する。
+          go run "${actionlint_package}" \
+            -ignore 'SC2016' \
+            .github/workflows/production-rollback.yml \
+            2>&1 | tee -a .ci-logs/operations/actionlint.log
+
+      - name: デプロイ・ロールバックゲートの構文とmock動作を検証
         shell: bash
         run: |
           set -o pipefail
@@ -100,17 +118,23 @@ jobs:
             scripts/resolve-current-release-image.sh \
             scripts/verify-release-image.sh \
             scripts/deploy-verified-compose.sh \
+            scripts/manage-production-release-ledger.sh \
             scripts/deploy-approved-production.sh \
+            scripts/rollback-approved-production.sh \
             scripts/validate-production-deployment-request.sh \
+            scripts/validate-production-rollback-request.sh \
             scripts/test-verified-compose-deployment.sh \
             scripts/test-production-deployment-policy.sh \
-            scripts/test-approved-production-deployment.sh
+            scripts/test-approved-production-deployment.sh \
+            scripts/test-approved-production-rollback.sh
           bash scripts/test-verified-compose-deployment.sh \
             2>&1 | tee .ci-logs/operations/deploy-gate-test.log
           bash scripts/test-production-deployment-policy.sh \
             2>&1 | tee .ci-logs/operations/production-deployment-policy-test.log
           bash scripts/test-approved-production-deployment.sh \
             2>&1 | tee .ci-logs/operations/approved-production-deployment-test.log
+          bash scripts/test-approved-production-rollback.sh \
+            2>&1 | tee .ci-logs/operations/approved-production-rollback-test.log
 
       - name: コンテナと監視設定を検証
         shell: bash

@@ -192,42 +192,57 @@ expect_failure "Workflow runのsource SHA不一致を拒否" \
     PRODUCTION_DEPLOYMENT_RESULT_DIR="${TMP_DIR}/run-result" \
     bash "${ROOT_DIR}/scripts/deploy-approved-production.sh" --check "${valid_manifest}"
 
-ledger="${TMP_DIR}/ledger"
+ledger="${TMP_DIR}/authorization-ledger"
+release_ledger="${TMP_DIR}/release-ledger"
 new_case
-expect_success "未使用の許可証で一度だけデプロイ" \
+expect_success "未使用の許可証で一度だけデプロイしてrelease台帳を初期化" \
   env "${base_env[@]}" \
     PRODUCTION_DEPLOYMENT_RESULT_DIR="${TMP_DIR}/deploy-result" \
     PRODUCTION_AUTHORIZATION_LEDGER_DIR="${ledger}" \
+    PRODUCTION_RELEASE_LEDGER_DIR="${release_ledger}" \
     bash "${ROOT_DIR}/scripts/deploy-approved-production.sh" --deploy "${valid_manifest}"
 [[ -e "${COMPOSE_UP_MARKER}" ]]
 [[ "$(find "${ledger}" -maxdepth 1 -name '*.used.json' | wc -l)" -eq 1 ]]
+[[ "$(find "${release_ledger}/events" -maxdepth 1 -name '*.json' | wc -l)" -eq 1 ]]
+jq -e \
+  --arg image "${IMAGE}" \
+  --arg revision "${REVISION}" \
+  '.operation == "deployment" and .previous == null and .target.image == $image and .target.source_revision == $revision' \
+  "${release_ledger}/current-release.json" >/dev/null
+bash "${ROOT_DIR}/scripts/manage-production-release-ledger.sh" validate "${release_ledger}" >/dev/null
 
 new_case
 expect_failure "使用済み許可証の再利用を拒否" \
   env "${base_env[@]}" \
     PRODUCTION_DEPLOYMENT_RESULT_DIR="${TMP_DIR}/replay-result" \
     PRODUCTION_AUTHORIZATION_LEDGER_DIR="${ledger}" \
+    PRODUCTION_RELEASE_LEDGER_DIR="${release_ledger}" \
     bash "${ROOT_DIR}/scripts/deploy-approved-production.sh" --deploy "${valid_manifest}"
 [[ ! -e "${COMPOSE_UP_MARKER}" ]]
 
 failure_manifest="${TMP_DIR}/failure.json"
 create_manifest "${failure_manifest}" "$((now - 60))" "$((now + 3540))" \
   'mizzz-ivr/vaultsend/.github/workflows/production-deploy.yml@refs/heads/main' 'CHG-2026-FAIL'
-failure_ledger="${TMP_DIR}/failure-ledger"
+failure_ledger="${TMP_DIR}/failure-authorization-ledger"
+failure_release_ledger="${TMP_DIR}/failure-release-ledger"
 new_case
-expect_failure "Compose失敗後も使用開始記録を保持" \
+expect_failure "Compose失敗後は許可証開始記録だけを保持しrelease台帳を更新しない" \
   env "${base_env[@]}" MOCK_COMPOSE_UP_FAIL=true \
     PRODUCTION_DEPLOYMENT_RESULT_DIR="${TMP_DIR}/failure-result" \
     PRODUCTION_AUTHORIZATION_LEDGER_DIR="${failure_ledger}" \
+    PRODUCTION_RELEASE_LEDGER_DIR="${failure_release_ledger}" \
     bash "${ROOT_DIR}/scripts/deploy-approved-production.sh" --deploy "${failure_manifest}"
 [[ "$(find "${failure_ledger}" -maxdepth 1 -name '*.started.json' | wc -l)" -eq 1 ]]
+[[ ! -e "${failure_release_ledger}/current-release.json" ]]
+[[ "$(find "${failure_release_ledger}/events" -maxdepth 1 -name '*.json' | wc -l)" -eq 0 ]]
 
 new_case
 expect_failure "途中失敗した許可証の再利用を拒否" \
   env "${base_env[@]}" \
     PRODUCTION_DEPLOYMENT_RESULT_DIR="${TMP_DIR}/retry-result" \
     PRODUCTION_AUTHORIZATION_LEDGER_DIR="${failure_ledger}" \
+    PRODUCTION_RELEASE_LEDGER_DIR="${failure_release_ledger}" \
     bash "${ROOT_DIR}/scripts/deploy-approved-production.sh" --deploy "${failure_manifest}"
 [[ ! -e "${COMPOSE_UP_MARKER}" ]]
 
-echo 'Attestation付き本番デプロイ許可証のmockテストに成功しました。'
+echo 'Attestation付き本番デプロイ許可証とrelease台帳のmockテストに成功しました。'

@@ -14,6 +14,7 @@ EXPECTED_SOURCE_REF="${EXPECTED_PRODUCTION_SOURCE_REF:-refs/heads/main}"
 EXPECTED_OIDC_ISSUER="${EXPECTED_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 RESULT_DIR="${PRODUCTION_DEPLOYMENT_RESULT_DIR:-artifacts/production-deployment/execution}"
 LEDGER_DIR="${PRODUCTION_AUTHORIZATION_LEDGER_DIR:-}"
+RELEASE_LEDGER_DIR="${PRODUCTION_RELEASE_LEDGER_DIR:-${LEDGER_DIR:+${LEDGER_DIR}/releases}}"
 MAX_AUTHORIZATION_TTL_SEC="${PRODUCTION_AUTHORIZATION_MAX_TTL_SEC:-7200}"
 
 usage() {
@@ -22,12 +23,13 @@ Usage:
   bash scripts/deploy-approved-production.sh --check /secure/path/authorization-manifest.json
 
   PRODUCTION_AUTHORIZATION_LEDGER_DIR=/var/lib/vaultsend/deployment-authorizations \
+  PRODUCTION_RELEASE_LEDGER_DIR=/var/lib/vaultsend/releases \
     bash scripts/deploy-approved-production.sh --deploy \
       /secure/path/authorization-manifest.json
 
 Modes:
-  --check   許可証・Workflow run・イメージ・Compose設定を検証し、起動しない。
-  --deploy  上記を再検証し、未使用の許可証でのみComposeを起動する。
+  --check   許可証・Workflow run・イメージ・Compose設定を検証する。起動しない。
+  --deploy  上記を再検証し、未使用の許可証でのみComposeを起動してrelease台帳を更新する。
 EOF
 }
 
@@ -65,7 +67,7 @@ if [[ ! "${MAX_AUTHORIZATION_TTL_SEC}" =~ ^[0-9]+$ || "${MAX_AUTHORIZATION_TTL_S
   fail "許可証の最大TTL設定が不正です: ${MAX_AUTHORIZATION_TTL_SEC}"
 fi
 
-for command_name in awk cosign cp date docker gh id jq mkdir mv rm rmdir sha256sum; do
+for command_name in awk cosign cp date docker flock gh id jq mkdir mv rm rmdir sha256sum; do
   require_command "${command_name}"
 done
 
@@ -168,11 +170,28 @@ fi
 if [[ -z "${LEDGER_DIR}" ]]; then
   fail "--deployではPRODUCTION_AUTHORIZATION_LEDGER_DIRを指定してください"
 fi
-if [[ -L "${LEDGER_DIR}" ]]; then
-  fail "許可証台帳ディレクトリにsymbolic linkは使用できません: ${LEDGER_DIR}"
+if [[ -z "${RELEASE_LEDGER_DIR}" ]]; then
+  fail "--deployではPRODUCTION_RELEASE_LEDGER_DIRを指定してください"
 fi
-mkdir -p "${LEDGER_DIR}"
-chmod 700 "${LEDGER_DIR}"
+if [[ -L "${LEDGER_DIR}" || -L "${RELEASE_LEDGER_DIR}" ]]; then
+  fail "許可証台帳・release台帳にsymbolic linkは使用できません"
+fi
+mkdir -p "${LEDGER_DIR}" "${RELEASE_LEDGER_DIR}"
+chmod 700 "${LEDGER_DIR}" "${RELEASE_LEDGER_DIR}"
+
+bash "${ROOT_DIR}/scripts/manage-production-release-ledger.sh" validate "${RELEASE_LEDGER_DIR}" >/dev/null
+release_lock_file="${RELEASE_LEDGER_DIR}/deployment.lock"
+[[ ! -L "${release_lock_file}" ]] || fail "release台帳lockにsymbolic linkは使用できません"
+exec 9>"${release_lock_file}"
+chmod 600 "${release_lock_file}"
+flock -n 9 || fail "別の本番デプロイまたはrollbackが実行中です"
+bash "${ROOT_DIR}/scripts/manage-production-release-ledger.sh" validate "${RELEASE_LEDGER_DIR}" >/dev/null
+
+current_file="${RELEASE_LEDGER_DIR}/current-release.json"
+previous_release='null'
+if [[ -f "${current_file}" ]]; then
+  previous_release="$(jq -c '{event_id, image: .target.image, source_revision: .target.source_revision}' "${current_file}")"
+fi
 
 started_record="${LEDGER_DIR}/${manifest_sha256}.started.json"
 used_record="${LEDGER_DIR}/${manifest_sha256}.used.json"
@@ -213,11 +232,50 @@ chmod 600 "${started_record}"
 bash "${ROOT_DIR}/scripts/deploy-verified-compose.sh" --deploy "${image_ref}"
 
 deployed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+deployed_at_epoch_ms="$(date -u +%s%3N)"
+release_event="${RESULT_DIR}/release-event.json"
+jq -n \
+  --arg event_id "${manifest_sha256}" \
+  --arg image "${image_ref}" \
+  --arg source_revision "${source_revision}" \
+  --argjson previous "${previous_release}" \
+  --arg manifest_sha256 "${manifest_sha256}" \
+  --arg change_request_id "${change_request_id}" \
+  --arg workflow_run_id "${workflow_run_id}" \
+  --arg workflow_run_attempt "${workflow_run_attempt}" \
+  --arg completed_at "${deployed_at}" \
+  --argjson completed_at_epoch_ms "${deployed_at_epoch_ms}" \
+  --arg completed_by "${started_by}" \
+  '{
+    schema_version: "1",
+    event_id: $event_id,
+    status: "success",
+    operation: "deployment",
+    target: {
+      image: $image,
+      source_revision: $source_revision
+    },
+    previous: $previous,
+    authorization: {
+      manifest_sha256: $manifest_sha256,
+      change_request_id: $change_request_id,
+      workflow_run_id: $workflow_run_id,
+      workflow_run_attempt: $workflow_run_attempt
+    },
+    completed_at: $completed_at,
+    completed_at_epoch_ms: $completed_at_epoch_ms,
+    completed_by: $completed_by
+  }' > "${release_event}"
+
+bash "${ROOT_DIR}/scripts/manage-production-release-ledger.sh" \
+  record-success "${RELEASE_LEDGER_DIR}" "${release_event}" >/dev/null
+
 used_tmp="${used_record}.tmp"
 jq \
   --arg status "used" \
   --arg deployed_at "${deployed_at}" \
-  '.status = $status | .deployed_at = $deployed_at' \
+  --arg release_event_id "${manifest_sha256}" \
+  '.status = $status | .deployed_at = $deployed_at | .release_event_id = $release_event_id' \
   "${started_record}" > "${used_tmp}"
 chmod 600 "${used_tmp}"
 mv "${used_tmp}" "${used_record}"
@@ -227,4 +285,4 @@ cp "${used_record}" "${RESULT_DIR}/authorization-use-record.json"
 cleanup_lock
 trap - EXIT
 
-echo "Attestation付き許可証による本番Composeデプロイに成功しました: ${image_ref}"
+echo "Attestation付き許可証による本番Composeデプロイとrelease台帳更新に成功しました: ${image_ref}"
