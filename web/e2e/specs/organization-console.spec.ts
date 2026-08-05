@@ -22,7 +22,9 @@ test("組織を切り替え、権限に応じた課金・請求書・メンバ�
   await expect(page.getByRole("heading", { name: "VaultSend開発部", level: 2 })).toBeVisible();
   await expect(page.getByText("あなたの権限: オーナー", { exact: true })).toBeVisible();
 
-  const billingSection = page.getByRole("heading", { name: "プランと利用量" }).locator("..").locator("..");
+  const billingSection = page
+    .getByRole("heading", { name: "プランと利用量" })
+    .locator("xpath=ancestor::section");
   await expect(billingSection.getByText("PRO", { exact: true })).toBeVisible();
   await expect(billingSection.getByText("2 / 5", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "請求書" })).toBeVisible();
