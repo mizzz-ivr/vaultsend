@@ -1,0 +1,298 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 94px;
+}
+
+.content {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.section,
+.summary {
+  display: grid;
+  gap: 20px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.sectionHeading h2,
+.permissionPanel h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.sectionHeading p,
+.permissionPanel p,
+.emptyMessage,
+.permissionNote,
+.seatProgress p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.organizationList {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.organizationButton {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.organizationButton:hover,
+.organizationButton[data-active="true"] {
+  border-color: #9ab1eb;
+  background: var(--accent-soft);
+}
+
+.organizationButton strong,
+.organizationButton span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizationButton span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.createArea {
+  display: grid;
+  gap: 12px;
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.definitionList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.definitionList > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f6;
+}
+
+.definitionList dt {
+  color: var(--muted);
+}
+
+.definitionList dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #edf1f6;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.table code {
+  overflow-wrap: anywhere;
+}
+
+.actionCell {
+  width: 92px;
+  text-align: right !important;
+}
+
+.selfLabel {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.memberForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  gap: 12px;
+  align-items: end;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.selectField {
+  display: grid;
+  gap: 7px;
+}
+
+.selectField label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.selectField select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  background: white;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.seatProgress {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.seatProgressLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invoiceList {
+  display: grid;
+}
+
+.invoiceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.invoiceRow:first-child {
+  padding-top: 0;
+}
+
+.invoiceRow > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invoiceRow > div:first-child span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invoiceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.permissionPanel {
+  border-left: 4px solid var(--accent);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .organizationList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .organizationList,
+  .metrics,
+  .memberForm {
+    grid-template-columns: 1fr;
+  }
+
+  .definitionList > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .invoiceRow {
+    grid-template-columns: 1fr;
+  }
+
+  .invoiceActions {
+    justify-content: flex-start;
+  }
+}
