@@ -149,6 +149,67 @@ export type DownloadURLResponse = {
   expires_at: string;
 };
 
+export type OrganizationRole = "owner" | "admin" | "member";
+
+export type Organization = {
+  id: string;
+  name: string;
+  owner_user_id: string;
+};
+
+export type OrganizationListResponse = {
+  items: Organization[];
+};
+
+export type OrganizationMember = {
+  user_id: string;
+  role: OrganizationRole;
+};
+
+export type OrganizationDetailResponse = {
+  organization: Organization;
+  members: OrganizationMember[];
+};
+
+export type OrganizationBillingDetails = {
+  plan: string;
+  status: string;
+  usage: {
+    current_month_shipments: number;
+    current_storage_bytes: number;
+  };
+  members_count: number;
+  seat_limit: number;
+  current_seat_usage: number;
+  remaining_seats: number;
+  next_billing_at?: string;
+  remaining: {
+    remaining_shipments?: number;
+  };
+};
+
+export type InvoiceSummary = {
+  invoice_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  hosted_invoice_url?: string;
+  invoice_pdf?: string;
+  created_at: string;
+  paid_at?: string;
+};
+
+export type OrganizationInvoiceListResponse = {
+  invoices: InvoiceSummary[];
+  has_more: boolean;
+  next_starting_after?: string;
+};
+
+export type CheckoutResponse = {
+  session_id: string;
+  url: string;
+};
+
 export type ApiErrorPayload = {
   error?: string;
   code?: string;
