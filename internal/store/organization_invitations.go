@@ -318,7 +318,7 @@ func resolveOrganizationSeatLimit(ctx context.Context, tx pgx.Tx, organizationID
 	const query = `
 SELECT COALESCE((
     SELECT CASE
-        WHEN plan='pro' AND status IN ('active','trialing') THEN GREATEST(seat_count, 1)
+        WHEN plan='pro' AND status IN ('active','trialing','past_due') THEN GREATEST(seat_count, 1)
         ELSE 1
     END
     FROM subscriptions
