@@ -23,7 +23,7 @@ const organization = {
 
 test("ownerがメール招待を作成し、再送・取消できる", async ({ page }) => {
   const diagnostics = collectDiagnostics(page);
-  const state = installInvitationManagementRoutes(page);
+  const state = await installInvitationManagementRoutes(page);
 
   await page.goto("/invitations");
 
@@ -120,7 +120,7 @@ type InvitationRecord = {
   created_at: string;
 };
 
-function installInvitationManagementRoutes(page: Page) {
+async function installInvitationManagementRoutes(page: Page) {
   const state = {
     invitations: [
       {
@@ -138,7 +138,7 @@ function installInvitationManagementRoutes(page: Page) {
     revokeCount: 0,
   };
 
-  void page.route("**/api/v1/**", async (route) => {
+  await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
