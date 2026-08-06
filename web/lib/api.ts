@@ -8,9 +8,14 @@ import type {
   CreateShipmentResponse,
   CreateUploadResponse,
   DownloadURLResponse,
+  InvitationRole,
   Organization,
   OrganizationBillingDetails,
   OrganizationDetailResponse,
+  OrganizationInvitation,
+  OrganizationInvitationAcceptResponse,
+  OrganizationInvitationInspectResponse,
+  OrganizationInvitationListResponse,
   OrganizationInvoiceListResponse,
   OrganizationListResponse,
   OrganizationMember,
@@ -181,6 +186,40 @@ export const api = {
     return request<{ status: string }>(
       `/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
       { method: "DELETE" },
+    );
+  },
+  createOrganizationInvitation(id: string, input: { email: string; role: InvitationRole }) {
+    return request<OrganizationInvitation>(`/orgs/${encodeURIComponent(id)}/invitations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  listOrganizationInvitations(id: string) {
+    return request<OrganizationInvitationListResponse>(
+      `/orgs/${encodeURIComponent(id)}/invitations`,
+    );
+  },
+  resendOrganizationInvitation(id: string, invitationId: string) {
+    return request<OrganizationInvitation>(
+      `/orgs/${encodeURIComponent(id)}/invitations/${encodeURIComponent(invitationId)}/resend`,
+      { method: "POST" },
+    );
+  },
+  revokeOrganizationInvitation(id: string, invitationId: string) {
+    return request<{ status: string }>(
+      `/orgs/${encodeURIComponent(id)}/invitations/${encodeURIComponent(invitationId)}`,
+      { method: "DELETE" },
+    );
+  },
+  inspectOrganizationInvitation(token: string) {
+    return request<OrganizationInvitationInspectResponse>(
+      `/invitations/${encodeURIComponent(token)}`,
+    );
+  },
+  acceptOrganizationInvitation(token: string) {
+    return request<OrganizationInvitationAcceptResponse>(
+      `/invitations/${encodeURIComponent(token)}/accept`,
+      { method: "POST" },
     );
   },
   getOrganizationBilling(id: string) {
