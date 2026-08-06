@@ -18,10 +18,10 @@ type shipmentMailTemplateData struct {
 
 type organizationInvitationTemplateData struct {
 	OrganizationName string
-	InvitedByEmail    string
-	Role              string
-	InvitationURL     string
-	ExpiresAt         string
+	InvitedByEmail   string
+	Role             string
+	InvitationURL    string
+	ExpiresAt        string
 }
 
 var shipmentHTMLTemplate = template.Must(template.New("shipment_html").Parse(`<!doctype html>
