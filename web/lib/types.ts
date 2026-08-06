@@ -150,6 +150,8 @@ export type DownloadURLResponse = {
 };
 
 export type OrganizationRole = "owner" | "admin" | "member";
+export type InvitationRole = "admin" | "member";
+export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 
 export type Organization = {
   id: string;
@@ -208,6 +210,37 @@ export type OrganizationInvoiceListResponse = {
 export type CheckoutResponse = {
   session_id: string;
   url: string;
+};
+
+export type OrganizationInvitation = {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: InvitationRole;
+  status: InvitationStatus;
+  expires_at: string;
+  last_sent_at?: string;
+  accepted_at?: string;
+  created_at: string;
+};
+
+export type OrganizationInvitationListResponse = {
+  items: OrganizationInvitation[];
+};
+
+export type OrganizationInvitationInspectResponse = {
+  organization_id: string;
+  organization_name: string;
+  email_masked: string;
+  role: InvitationRole;
+  status: InvitationStatus;
+  expires_at: string;
+};
+
+export type OrganizationInvitationAcceptResponse = {
+  organization: Organization;
+  member: OrganizationMember;
+  already_accepted: boolean;
 };
 
 export type ApiErrorPayload = {
