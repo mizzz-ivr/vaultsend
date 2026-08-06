@@ -73,12 +73,13 @@ VALUES ($1,$2,$3,'integration-password-hash','active')`, user.id, user.email, us
 		t.Fatalf("invitationの作成に失敗しました: %v", err)
 	}
 
+	duplicateHash := sha256.Sum256([]byte("duplicate-token"))
 	_, err = queries.CreateOrganizationInvitation(ctx, CreateOrganizationInvitationParams{
 		OrganizationID:  org.ID,
 		Email:           inviteeEmail,
 		EmailNormalized: inviteeEmail,
 		Role:            "admin",
-		TokenHash:       hex.EncodeToString(sha256.New().Sum([]byte("duplicate"))),
+		TokenHash:       hex.EncodeToString(duplicateHash[:]),
 		InvitedByUserID: ownerID,
 		ExpiresAt:       expiresAt,
 	})
