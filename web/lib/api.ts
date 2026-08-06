@@ -3,10 +3,18 @@ import type {
   AccessVerifyResponse,
   ApiErrorPayload,
   AuthResponse,
+  CheckoutResponse,
   CompleteUploadResponse,
   CreateShipmentResponse,
   CreateUploadResponse,
   DownloadURLResponse,
+  Organization,
+  OrganizationBillingDetails,
+  OrganizationDetailResponse,
+  OrganizationInvoiceListResponse,
+  OrganizationListResponse,
+  OrganizationMember,
+  OrganizationRole,
   ShipmentDetail,
   ShipmentListResponse,
 } from "@/lib/types";
@@ -146,6 +154,51 @@ export const api = {
     return request<unknown>(`/shipments/${encodeURIComponent(id)}/resend`, {
       method: "POST",
       body: JSON.stringify({ recipient_ids: [] }),
+    });
+  },
+  listOrganizations() {
+    return request<OrganizationListResponse>("/orgs");
+  },
+  createOrganization(name: string) {
+    return request<Organization>("/orgs", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  },
+  getOrganization(id: string) {
+    return request<OrganizationDetailResponse>(`/orgs/${encodeURIComponent(id)}`);
+  },
+  addOrganizationMember(
+    id: string,
+    input: { user_id: string; role: OrganizationRole },
+  ) {
+    return request<OrganizationMember>(`/orgs/${encodeURIComponent(id)}/members`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  removeOrganizationMember(id: string, userId: string) {
+    return request<{ status: string }>(
+      `/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
+      { method: "DELETE" },
+    );
+  },
+  getOrganizationBilling(id: string) {
+    return request<OrganizationBillingDetails>(`/orgs/${encodeURIComponent(id)}/billing`);
+  },
+  listOrganizationInvoices(id: string, limit = 10, startingAfter = "") {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (startingAfter) {
+      query.set("starting_after", startingAfter);
+    }
+    return request<OrganizationInvoiceListResponse>(
+      `/orgs/${encodeURIComponent(id)}/invoices?${query.toString()}`,
+    );
+  },
+  createOrganizationCheckout(id: string) {
+    return request<CheckoutResponse>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ organization_id: id }),
     });
   },
 };
