@@ -62,7 +62,7 @@ func (w *MailWorker) handleMessage(ctx context.Context, m queue.ReceivedMessage)
 		return fmt.Errorf("decode message: %w", err)
 	}
 
-	body, err := mail.BuildShipmentNotification(w.FrontendURL, payload)
+	body, err := w.buildBody(payload)
 	if err != nil {
 		return fmt.Errorf("build mail body: %w", err)
 	}
@@ -75,6 +75,13 @@ func (w *MailWorker) handleMessage(ctx context.Context, m queue.ReceivedMessage)
 		return fmt.Errorf("delete message: %w", err)
 	}
 	return nil
+}
+
+func (w *MailWorker) buildBody(payload queue.MailNotification) (mail.Body, error) {
+	if payload.Template == "organization_invitation" {
+		return mail.BuildOrganizationInvitation(w.FrontendURL, payload)
+	}
+	return mail.BuildShipmentNotification(w.FrontendURL, payload)
 }
 
 func (w *MailWorker) markNotificationSent(ctx context.Context, payload queue.MailNotification) {
