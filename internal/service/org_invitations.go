@@ -53,9 +53,9 @@ type OrganizationInvitationInspectOutput struct {
 }
 
 type OrganizationInvitationAcceptOutput struct {
-	Organization OrgOutput       `json:"organization"`
-	Member       OrgMemberOutput `json:"member"`
-	AlreadyAccepted bool         `json:"already_accepted"`
+	Organization    OrgOutput       `json:"organization"`
+	Member          OrgMemberOutput `json:"member"`
+	AlreadyAccepted bool            `json:"already_accepted"`
 }
 
 func (s *OrgService) CreateInvitation(ctx context.Context, actorID uuid.UUID, actorEmail string, orgID uuid.UUID, email, role string) (OrganizationInvitationOutput, error) {
@@ -357,15 +357,15 @@ func (s *OrgService) enqueueInvitation(ctx context.Context, invitation store.Org
 	subject := fmt.Sprintf("VaultSend: %s への招待", organizationName)
 	invitationID := invitation.ID
 	if err := s.Queue.EnqueueMail(ctx, queue.MailNotification{
-		Template:          "organization_invitation",
-		InvitationID:      &invitationID,
-		Email:             invitation.Email,
-		Token:             plainToken,
-		Subject:           subject,
-		OrganizationName:  organizationName,
-		InvitationRole:    invitation.Role,
-		InvitedByEmail:    strings.TrimSpace(inviterEmail),
-		ExpiresAt:         &invitation.ExpiresAt,
+		Template:         "organization_invitation",
+		InvitationID:     &invitationID,
+		Email:            invitation.Email,
+		Token:            plainToken,
+		Subject:          subject,
+		OrganizationName: organizationName,
+		InvitationRole:   invitation.Role,
+		InvitedByEmail:   strings.TrimSpace(inviterEmail),
+		ExpiresAt:        &invitation.ExpiresAt,
 	}); err != nil {
 		return &APIError{Status: 503, Code: "invitation_mail_unavailable", Message: "招待メールをキューへ登録できませんでした"}
 	}
@@ -429,8 +429,8 @@ func toOrganizationInvitationOutput(invitation store.OrganizationInvitation, now
 
 func invitationAcceptOutput(org store.Organization, member store.OrganizationMember, alreadyAccepted bool) OrganizationInvitationAcceptOutput {
 	return OrganizationInvitationAcceptOutput{
-		Organization: OrgOutput{ID: org.ID, Name: org.Name, OwnerUserID: org.OwnerUserID},
-		Member:       OrgMemberOutput{UserID: member.UserID, Role: member.Role},
+		Organization:    OrgOutput{ID: org.ID, Name: org.Name, OwnerUserID: org.OwnerUserID},
+		Member:          OrgMemberOutput{UserID: member.UserID, Role: member.Role},
 		AlreadyAccepted: alreadyAccepted,
 	}
 }
