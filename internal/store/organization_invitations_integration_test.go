@@ -68,6 +68,7 @@ VALUES ($1,$2,$3,'integration-password-hash','active')`, user.id, user.email, us
 		TokenHash:       tokenHash,
 		InvitedByUserID: ownerID,
 		ExpiresAt:       expiresAt,
+		SeatLimit:       2,
 	})
 	if err != nil {
 		t.Fatalf("invitationの作成に失敗しました: %v", err)
@@ -82,6 +83,7 @@ VALUES ($1,$2,$3,'integration-password-hash','active')`, user.id, user.email, us
 		TokenHash:       hex.EncodeToString(duplicateHash[:]),
 		InvitedByUserID: ownerID,
 		ExpiresAt:       expiresAt,
+		SeatLimit:       3,
 	})
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("有効な重複招待でErrConflictを期待しました: %v", err)
@@ -100,6 +102,7 @@ VALUES ($1,$2,$3,'integration-password-hash','active')`, user.id, user.email, us
 		InvitationID: invitation.ID,
 		TokenHash:    tokenHash,
 		UserID:       inviteeID,
+		SeatLimit:    2,
 	})
 	if err != nil {
 		t.Fatalf("invitationの承認に失敗しました: %v", err)
@@ -116,6 +119,7 @@ VALUES ($1,$2,$3,'integration-password-hash','active')`, user.id, user.email, us
 		InvitationID: invitation.ID,
 		TokenHash:    tokenHash,
 		UserID:       inviteeID,
+		SeatLimit:    2,
 	}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("二重承認でErrConflictを期待しました: %v", err)
 	}
