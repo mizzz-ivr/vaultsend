@@ -35,19 +35,21 @@ type CreateOrganizationInvitationParams struct {
 	TokenHash       string
 	InvitedByUserID uuid.UUID
 	ExpiresAt       time.Time
+	SeatLimit       int64
 }
 
 type RefreshOrganizationInvitationParams struct {
-	InvitationID uuid.UUID
+	InvitationID   uuid.UUID
 	OrganizationID uuid.UUID
-	TokenHash    string
-	ExpiresAt    time.Time
+	TokenHash      string
+	ExpiresAt      time.Time
 }
 
 type AcceptOrganizationInvitationParams struct {
 	InvitationID uuid.UUID
 	TokenHash    string
 	UserID       uuid.UUID
+	SeatLimit    int64
 }
 
 func (q *Queries) CreateOrganizationInvitation(ctx context.Context, arg CreateOrganizationInvitationParams) (OrganizationInvitation, error) {
@@ -57,12 +59,29 @@ func (q *Queries) CreateOrganizationInvitation(ctx context.Context, arg CreateOr
 	}
 	defer tx.Rollback(ctx)
 
+	if err := lockOrganization(ctx, tx, arg.OrganizationID); err != nil {
+		return OrganizationInvitation{}, err
+	}
+
 	const expireStale = `
 UPDATE organization_invitations
 SET status='revoked', revoked_at=now()
-WHERE organization_id=$1 AND email_normalized=$2 AND status='pending' AND expires_at <= now()`
-	if _, err := tx.Exec(ctx, expireStale, arg.OrganizationID, arg.EmailNormalized); err != nil {
+WHERE organization_id=$1 AND status='pending' AND expires_at <= now()`
+	if _, err := tx.Exec(ctx, expireStale, arg.OrganizationID); err != nil {
 		return OrganizationInvitation{}, err
+	}
+	if arg.SeatLimit > 0 {
+		const countSeats = `
+SELECT
+    (SELECT COUNT(1) FROM organization_members WHERE organization_id=$1)
+  + (SELECT COUNT(1) FROM organization_invitations WHERE organization_id=$1 AND status='pending' AND expires_at > now())`
+		var reservedSeats int64
+		if err := tx.QueryRow(ctx, countSeats, arg.OrganizationID).Scan(&reservedSeats); err != nil {
+			return OrganizationInvitation{}, err
+		}
+		if reservedSeats >= arg.SeatLimit {
+			return OrganizationInvitation{}, ErrOrganizationSeatLimit
+		}
 	}
 
 	const query = `
@@ -214,14 +233,14 @@ func (q *Queries) AcceptOrganizationInvitation(ctx context.Context, arg AcceptOr
 	}
 	defer tx.Rollback(ctx)
 
-	const lockQuery = `
+	const lockInvitation = `
 SELECT id, organization_id, email, email_normalized, role, token_hash, status, invited_by_user_id,
        accepted_by_user_id, expires_at, last_sent_at, accepted_at, revoked_at, created_at, updated_at
 FROM organization_invitations
 WHERE id=$1 AND token_hash=$2
 FOR UPDATE`
 	var invitation OrganizationInvitation
-	if err := scanOrganizationInvitation(tx.QueryRow(ctx, lockQuery, arg.InvitationID, arg.TokenHash), &invitation); err != nil {
+	if err := scanOrganizationInvitation(tx.QueryRow(ctx, lockInvitation, arg.InvitationID, arg.TokenHash), &invitation); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return OrganizationMember{}, ErrNotFound
 		}
@@ -229,6 +248,19 @@ FOR UPDATE`
 	}
 	if invitation.Status != "pending" || !invitation.ExpiresAt.After(time.Now().UTC()) {
 		return OrganizationMember{}, ErrConflict
+	}
+	if err := lockOrganization(ctx, tx, invitation.OrganizationID); err != nil {
+		return OrganizationMember{}, err
+	}
+	if arg.SeatLimit > 0 {
+		const countMembers = `SELECT COUNT(1) FROM organization_members WHERE organization_id=$1`
+		var members int64
+		if err := tx.QueryRow(ctx, countMembers, invitation.OrganizationID).Scan(&members); err != nil {
+			return OrganizationMember{}, err
+		}
+		if members >= arg.SeatLimit {
+			return OrganizationMember{}, ErrOrganizationSeatLimit
+		}
 	}
 
 	const memberQuery = `
@@ -264,6 +296,15 @@ WHERE id=$1 AND status='pending'`
 		return OrganizationMember{}, err
 	}
 	return member, nil
+}
+
+func lockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) error {
+	var lockedID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM organizations WHERE id=$1 FOR UPDATE`, organizationID).Scan(&lockedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
 }
 
 type invitationScanner interface {
