@@ -47,6 +47,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 	}
 	billingHandler := handler.BillingHandler{Service: billingSvc}
 	orgHandler := handler.OrgHandler{Service: orgSvc}
+	orgInvitationHandler := handler.OrgInvitationHandler{Service: orgSvc}
 	auditHandler := handler.SecurityAuditHandler{Service: auditSvc}
 	internalMetricsHandler := handler.InternalMetricsHandler{
 		Store:        queries,
@@ -72,6 +73,7 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 		r.Get("/access/{token}", accessHandler.InspectAccess)
 		r.Post("/access/{token}/verify", accessHandler.VerifyAccess)
 		r.Get("/files/{id}/download-url", accessHandler.GenerateDownloadURL)
+		r.Get("/invitations/{token}", orgInvitationHandler.Inspect)
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", authHandler.Register)
@@ -90,6 +92,11 @@ func NewServer(cfg config.Config, queries *store.Queries, uploadSvc *service.Upl
 			r.Get("/orgs/{id}", orgHandler.GetOrg)
 			r.Post("/orgs/{id}/members", orgHandler.AddMember)
 			r.Delete("/orgs/{id}/members/{user_id}", orgHandler.DeleteMember)
+			r.Post("/orgs/{id}/invitations", orgInvitationHandler.Create)
+			r.Get("/orgs/{id}/invitations", orgInvitationHandler.List)
+			r.Post("/orgs/{id}/invitations/{invitation_id}/resend", orgInvitationHandler.Resend)
+			r.Delete("/orgs/{id}/invitations/{invitation_id}", orgInvitationHandler.Revoke)
+			r.Post("/invitations/{token}/accept", orgInvitationHandler.Accept)
 			r.Get("/orgs/{id}/security-audit-events", auditHandler.ListOrganizationEvents)
 		})
 		r.Group(func(r chi.Router) {
