@@ -101,10 +101,10 @@ func BuildOrganizationInvitation(frontendURL string, msg queue.MailNotification)
 	}
 	data := organizationInvitationTemplateData{
 		OrganizationName: msg.OrganizationName,
-		InvitedByEmail:    msg.InvitedByEmail,
-		Role:              role,
-		InvitationURL:     fmt.Sprintf("%s/invite/%s", base, msg.Token),
-		ExpiresAt:         expires,
+		InvitedByEmail:   msg.InvitedByEmail,
+		Role:             role,
+		InvitationURL:    fmt.Sprintf("%s/invite/%s", base, msg.Token),
+		ExpiresAt:        expires,
 	}
 
 	var htmlBuilder strings.Builder
