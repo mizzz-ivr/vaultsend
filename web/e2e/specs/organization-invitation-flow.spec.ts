@@ -106,7 +106,10 @@ test("未ログイン時は招待URLを保持して認証画面へ移動でき�
   await expect(page).toHaveURL(/\/auth\?next=%2Finvite%2Fe2e-invitation-token$/);
 
   expect(diagnostics.pageErrors).toEqual([]);
-  expect(diagnostics.consoleErrors).toEqual([]);
+  const unexpectedConsoleErrors = diagnostics.consoleErrors.filter(
+    (message) => !message.includes("401 (Unauthorized)"),
+  );
+  expect(unexpectedConsoleErrors).toEqual([]);
 });
 
 type InvitationRecord = {
