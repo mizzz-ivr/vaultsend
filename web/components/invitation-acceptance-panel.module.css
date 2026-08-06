@@ -23,7 +23,7 @@
   letter-spacing: -0.04em;
 }
 
-.header > p:not(.eyebrow),
+.header > p:not(:global(.eyebrow)),
 .success p,
 .actionArea p {
   margin: 0;
@@ -64,7 +64,7 @@
   background: var(--accent-soft);
 }
 
-.actionArea .button {
+.actionArea :global(.button) {
   width: fit-content;
 }
 
@@ -92,7 +92,7 @@
   font-weight: 800;
 }
 
-.success .inline-actions {
+.success :global(.inline-actions) {
   justify-content: center;
 }
 
@@ -110,7 +110,7 @@
     gap: 3px;
   }
 
-  .actionArea .button {
+  .actionArea :global(.button) {
     width: 100%;
   }
 }
