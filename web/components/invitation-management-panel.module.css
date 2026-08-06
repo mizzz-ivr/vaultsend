@@ -1,0 +1,180 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 94px;
+}
+
+.content,
+.section {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
+.sectionHeading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.organizationList {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.organizationButton {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.organizationButton:hover,
+.organizationButton[data-active="true"] {
+  border-color: #9ab1eb;
+  background: var(--accent-soft);
+}
+
+.organizationButton strong,
+.organizationButton span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizationButton span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.invitationForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  gap: 12px;
+  align-items: end;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.selectField {
+  display: grid;
+  gap: 7px;
+}
+
+.selectField label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.selectField select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  background: white;
+}
+
+.permissionMessage {
+  padding: 18px;
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--accent-soft);
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #edf1f6;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.table td:first-child {
+  min-width: 220px;
+  overflow-wrap: anywhere;
+}
+
+.actionCell {
+  min-width: 150px;
+  text-align: right !important;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .organizationList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .organizationList,
+  .invitationForm {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+
+  .actionCell {
+    text-align: left !important;
+  }
+}
