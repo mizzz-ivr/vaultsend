@@ -70,18 +70,20 @@ WHERE organization_id=$1 AND status='pending' AND expires_at <= now()`
 	if _, err := tx.Exec(ctx, expireStale, arg.OrganizationID); err != nil {
 		return OrganizationInvitation{}, err
 	}
-	if arg.SeatLimit > 0 {
-		const countSeats = `
+	seatLimit, err := resolveOrganizationSeatLimit(ctx, tx, arg.OrganizationID, arg.SeatLimit)
+	if err != nil {
+		return OrganizationInvitation{}, err
+	}
+	const countSeats = `
 SELECT
     (SELECT COUNT(1) FROM organization_members WHERE organization_id=$1)
   + (SELECT COUNT(1) FROM organization_invitations WHERE organization_id=$1 AND status='pending' AND expires_at > now())`
-		var reservedSeats int64
-		if err := tx.QueryRow(ctx, countSeats, arg.OrganizationID).Scan(&reservedSeats); err != nil {
-			return OrganizationInvitation{}, err
-		}
-		if reservedSeats >= arg.SeatLimit {
-			return OrganizationInvitation{}, ErrOrganizationSeatLimit
-		}
+	var reservedSeats int64
+	if err := tx.QueryRow(ctx, countSeats, arg.OrganizationID).Scan(&reservedSeats); err != nil {
+		return OrganizationInvitation{}, err
+	}
+	if reservedSeats >= seatLimit {
+		return OrganizationInvitation{}, ErrOrganizationSeatLimit
 	}
 
 	const query = `
@@ -252,15 +254,17 @@ FOR UPDATE`
 	if err := lockOrganization(ctx, tx, invitation.OrganizationID); err != nil {
 		return OrganizationMember{}, err
 	}
-	if arg.SeatLimit > 0 {
-		const countMembers = `SELECT COUNT(1) FROM organization_members WHERE organization_id=$1`
-		var members int64
-		if err := tx.QueryRow(ctx, countMembers, invitation.OrganizationID).Scan(&members); err != nil {
-			return OrganizationMember{}, err
-		}
-		if members >= arg.SeatLimit {
-			return OrganizationMember{}, ErrOrganizationSeatLimit
-		}
+	seatLimit, err := resolveOrganizationSeatLimit(ctx, tx, invitation.OrganizationID, arg.SeatLimit)
+	if err != nil {
+		return OrganizationMember{}, err
+	}
+	const countMembers = `SELECT COUNT(1) FROM organization_members WHERE organization_id=$1`
+	var members int64
+	if err := tx.QueryRow(ctx, countMembers, invitation.OrganizationID).Scan(&members); err != nil {
+		return OrganizationMember{}, err
+	}
+	if members >= seatLimit {
+		return OrganizationMember{}, ErrOrganizationSeatLimit
 	}
 
 	const memberQuery = `
@@ -305,6 +309,28 @@ func lockOrganization(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID) 
 		return ErrNotFound
 	}
 	return err
+}
+
+func resolveOrganizationSeatLimit(ctx context.Context, tx pgx.Tx, organizationID uuid.UUID, explicitLimit int64) (int64, error) {
+	if explicitLimit > 0 {
+		return explicitLimit, nil
+	}
+	const query = `
+SELECT COALESCE((
+    SELECT CASE
+        WHEN plan='pro' AND status IN ('active','trialing') THEN GREATEST(seat_count, 1)
+        ELSE 1
+    END
+    FROM subscriptions
+    WHERE organization_id=$1
+    ORDER BY updated_at DESC
+    LIMIT 1
+), 1)`
+	var seatLimit int64
+	if err := tx.QueryRow(ctx, query, organizationID).Scan(&seatLimit); err != nil {
+		return 0, err
+	}
+	return seatLimit, nil
 }
 
 type invitationScanner interface {
