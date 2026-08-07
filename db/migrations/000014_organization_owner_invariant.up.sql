@@ -1,3 +1,9 @@
+INSERT INTO organization_members (organization_id, user_id, role)
+SELECT id, owner_user_id, 'owner'
+FROM organizations
+ON CONFLICT (organization_id, user_id)
+DO UPDATE SET role = 'owner';
+
 UPDATE organization_members AS om
 SET role = 'admin'
 FROM organizations AS o
