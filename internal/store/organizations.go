@@ -63,6 +63,113 @@ func (q *Queries) GetOrgByID(ctx context.Context, orgID uuid.UUID) (Organization
 	return org, err
 }
 
+func (q *Queries) UpdateOrganizationName(ctx context.Context, orgID uuid.UUID, name string) (Organization, error) {
+	const query = `UPDATE organizations
+	SET name=$2, updated_at=NOW()
+	WHERE id=$1
+	RETURNING id, name, owner_user_id, created_at, updated_at`
+	var org Organization
+	err := q.db.QueryRow(ctx, query, orgID, name).Scan(&org.ID, &org.Name, &org.OwnerUserID, &org.CreatedAt, &org.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Organization{}, ErrNotFound
+	}
+	return org, err
+}
+
+func (q *Queries) TransferOrganizationOwnership(ctx context.Context, orgID, currentOwnerID, targetUserID uuid.UUID) (Organization, error) {
+	if currentOwnerID == targetUserID {
+		return Organization{}, ErrConflict
+	}
+
+	tx, err := q.db.Begin(ctx)
+	if err != nil {
+		return Organization{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var ownerID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT owner_user_id FROM organizations WHERE id=$1 FOR UPDATE`, orgID).Scan(&ownerID); errors.Is(err, pgx.ErrNoRows) {
+		return Organization{}, ErrNotFound
+	} else if err != nil {
+		return Organization{}, err
+	}
+	if ownerID != currentOwnerID {
+		return Organization{}, ErrConflict
+	}
+
+	var targetRole string
+	if err := tx.QueryRow(ctx, `SELECT role FROM organization_members WHERE organization_id=$1 AND user_id=$2 FOR UPDATE`, orgID, targetUserID).Scan(&targetRole); errors.Is(err, pgx.ErrNoRows) {
+		return Organization{}, ErrNotFound
+	} else if err != nil {
+		return Organization{}, err
+	}
+	if targetRole != "admin" && targetRole != "member" {
+		return Organization{}, ErrConflict
+	}
+
+	cmd, err := tx.Exec(ctx, `UPDATE organization_members SET role='admin' WHERE organization_id=$1 AND user_id=$2 AND role='owner'`, orgID, currentOwnerID)
+	if err != nil {
+		return Organization{}, err
+	}
+	if cmd.RowsAffected() != 1 {
+		return Organization{}, ErrConflict
+	}
+
+	cmd, err = tx.Exec(ctx, `UPDATE organization_members SET role='owner' WHERE organization_id=$1 AND user_id=$2 AND role IN ('admin','member')`, orgID, targetUserID)
+	if err != nil {
+		return Organization{}, err
+	}
+	if cmd.RowsAffected() != 1 {
+		return Organization{}, ErrConflict
+	}
+
+	var org Organization
+	if err := tx.QueryRow(ctx, `UPDATE organizations
+		SET owner_user_id=$2, updated_at=NOW()
+		WHERE id=$1
+		RETURNING id, name, owner_user_id, created_at, updated_at`, orgID, targetUserID).Scan(
+		&org.ID,
+		&org.Name,
+		&org.OwnerUserID,
+		&org.CreatedAt,
+		&org.UpdatedAt,
+	); err != nil {
+		return Organization{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Organization{}, err
+	}
+	return org, nil
+}
+
+func (q *Queries) LeaveOrganization(ctx context.Context, orgID, userID uuid.UUID) error {
+	tx, err := q.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var ownerID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT owner_user_id FROM organizations WHERE id=$1 FOR UPDATE`, orgID).Scan(&ownerID); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	if ownerID == userID {
+		return ErrConflict
+	}
+
+	cmd, err := tx.Exec(ctx, `DELETE FROM organization_members WHERE organization_id=$1 AND user_id=$2`, orgID, userID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}
+
 func (q *Queries) GetUserOrgs(ctx context.Context, userID uuid.UUID) ([]Organization, error) {
 	const query = `SELECT o.id, o.name, o.owner_user_id, o.created_at, o.updated_at
 	FROM organizations o
@@ -97,15 +204,30 @@ func (q *Queries) AddMember(ctx context.Context, orgID uuid.UUID, userID uuid.UU
 }
 
 func (q *Queries) RemoveMember(ctx context.Context, orgID uuid.UUID, userID uuid.UUID) error {
-	const query = `DELETE FROM organization_members WHERE organization_id=$1 AND user_id=$2`
-	cmd, err := q.db.Exec(ctx, query, orgID, userID)
+	tx, err := q.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var ownerID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT owner_user_id FROM organizations WHERE id=$1 FOR UPDATE`, orgID).Scan(&ownerID); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	if ownerID == userID {
+		return ErrConflict
+	}
+
+	cmd, err := tx.Exec(ctx, `DELETE FROM organization_members WHERE organization_id=$1 AND user_id=$2`, orgID, userID)
 	if err != nil {
 		return err
 	}
 	if cmd.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (q *Queries) GetOrgMembers(ctx context.Context, orgID uuid.UUID) ([]OrganizationMember, error) {
