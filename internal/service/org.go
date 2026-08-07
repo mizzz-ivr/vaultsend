@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/example/vaultsend/internal/queue"
 	"github.com/example/vaultsend/internal/store"
 	"github.com/google/uuid"
 )
@@ -27,8 +29,13 @@ type OrgBillingService interface {
 }
 
 type OrgService struct {
-	Store   OrgStore
-	Billing OrgBillingService
+	Store           OrgStore
+	Billing         OrgBillingService
+	InvitationStore OrgInvitationStore
+	Queue           queue.Enqueuer
+	FrontendURL     string
+	InvitationTTL   time.Duration
+	Now             func() time.Time
 }
 
 type OrgOutput struct {

@@ -7,17 +7,22 @@ import (
 	"github.com/google/uuid"
 )
 
-// MailNotification は受信者通知メールを非同期送信するためのキューイベント。
+// MailNotification は通知メールを非同期送信するためのキューイベント。
 type MailNotification struct {
-	ShipmentID        uuid.UUID  `json:"shipment_id"`
-	RecipientID       uuid.UUID  `json:"recipient_id"`
+	Template          string     `json:"template,omitempty"`
+	ShipmentID        uuid.UUID  `json:"shipment_id,omitempty"`
+	RecipientID       uuid.UUID  `json:"recipient_id,omitempty"`
 	NotificationEvent *int64     `json:"notification_event_id,omitempty"`
 	NotificationType  string     `json:"notification_type,omitempty"`
+	InvitationID      *uuid.UUID `json:"invitation_id,omitempty"`
 	Email             string     `json:"email"`
 	Token             string     `json:"token"`
 	Subject           string     `json:"subject"`
 	Message           *string    `json:"message,omitempty"`
 	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	OrganizationName  string     `json:"organization_name,omitempty"`
+	InvitationRole    string     `json:"invitation_role,omitempty"`
+	InvitedByEmail    string     `json:"invited_by_email,omitempty"`
 }
 
 // Enqueuer はメール送信キュー投入の抽象。

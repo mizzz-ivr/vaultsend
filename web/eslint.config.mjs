@@ -7,6 +7,8 @@ export default defineConfig([
   ...nextTypeScript,
   {
     files: [
+      "components/invitation-acceptance-panel.tsx",
+      "components/invitation-management-panel.tsx",
       "components/organization-console.tsx",
       "components/recipient-download-panel.tsx",
       "components/shipment-dashboard.tsx",

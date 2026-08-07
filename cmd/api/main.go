@@ -73,9 +73,15 @@ func main() {
 	}
 	billingSvc := &service.BillingService{Store: queries, Stripe: stripeClient, FrontendURL: cfg.FrontendURL}
 	uploadSvc.Billing = billingSvc
-	orgSvc := &service.OrgService{Store: queries, Billing: billingSvc}
 
 	mailQueue := queue.NewSQSQueue(sqs.NewFromConfig(awsCfg), cfg.SQSQueueURL)
+	orgSvc := &service.OrgService{
+		Store:           queries,
+		Billing:         billingSvc,
+		InvitationStore: queries,
+		Queue:           mailQueue,
+		FrontendURL:     cfg.FrontendURL,
+	}
 	shipmentSvc := &service.ShipmentService{Store: queries, Queue: mailQueue, FrontendURL: cfg.FrontendURL, Billing: billingSvc, Org: orgSvc}
 	guard := service.NewAccessGuard()
 	guard.VerifyMaxAttempts = cfg.VerifyMaxAttempts

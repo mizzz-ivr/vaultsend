@@ -1,0 +1,14 @@
+@media (max-width: 680px) {
+  .header-nav {
+    gap: 8px;
+    font-size: 0.84rem;
+  }
+
+  .header-nav .nav-mobile-hidden {
+    display: none;
+  }
+
+  .header-nav .button-small {
+    padding-inline: 10px;
+  }
+}
