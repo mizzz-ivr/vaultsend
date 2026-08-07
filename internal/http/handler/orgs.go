@@ -16,6 +16,12 @@ type OrgHandler struct{ Service *service.OrgService }
 type createOrgRequest struct {
 	Name string `json:"name"`
 }
+type updateOrgRequest struct {
+	Name string `json:"name"`
+}
+type transferOwnerRequest struct {
+	TargetUserID uuid.UUID `json:"target_user_id"`
+}
 type addMemberRequest struct {
 	UserID uuid.UUID `json:"user_id"`
 	Role   string    `json:"role"`
@@ -73,6 +79,81 @@ func (h OrgHandler) GetOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render.JSON(w, http.StatusOK, map[string]any{"organization": org, "members": members})
+}
+
+func (h OrgHandler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		render.Error(w, http.StatusUnauthorized, "unauthorized", "ログインが必要です", chimw.GetReqID(r.Context()))
+		return
+	}
+	orgID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, "invalid_org_id", "organization id が不正です", chimw.GetReqID(r.Context()))
+		return
+	}
+	var req updateOrgRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		render.Error(w, http.StatusBadRequest, "invalid_request", "不正なJSONです", chimw.GetReqID(r.Context()))
+		return
+	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), orgID)
+	middleware.SetSecurityAuditResource(r.Context(), "organization", orgID)
+	middleware.SetSecurityAuditDetail(r.Context(), "new_name", req.Name)
+	out, err := h.Service.UpdateOrganization(r.Context(), user.ID, orgID, req.Name)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	render.JSON(w, http.StatusOK, out)
+}
+
+func (h OrgHandler) TransferOwner(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		render.Error(w, http.StatusUnauthorized, "unauthorized", "ログインが必要です", chimw.GetReqID(r.Context()))
+		return
+	}
+	orgID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, "invalid_org_id", "organization id が不正です", chimw.GetReqID(r.Context()))
+		return
+	}
+	var req transferOwnerRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		render.Error(w, http.StatusBadRequest, "invalid_request", "不正なJSONです", chimw.GetReqID(r.Context()))
+		return
+	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), orgID)
+	middleware.SetSecurityAuditResource(r.Context(), "user", req.TargetUserID)
+	middleware.SetSecurityAuditDetail(r.Context(), "action", "owner_transfer")
+	out, err := h.Service.TransferOwnership(r.Context(), user.ID, orgID, req.TargetUserID)
+	if err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	render.JSON(w, http.StatusOK, out)
+}
+
+func (h OrgHandler) LeaveOrg(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.AuthUserFromContext(r.Context())
+	if !ok {
+		render.Error(w, http.StatusUnauthorized, "unauthorized", "ログインが必要です", chimw.GetReqID(r.Context()))
+		return
+	}
+	orgID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		render.Error(w, http.StatusBadRequest, "invalid_org_id", "organization id が不正です", chimw.GetReqID(r.Context()))
+		return
+	}
+	middleware.SetSecurityAuditOrganizationID(r.Context(), orgID)
+	middleware.SetSecurityAuditResource(r.Context(), "user", user.ID)
+	middleware.SetSecurityAuditDetail(r.Context(), "action", "leave_organization")
+	if err := h.Service.LeaveOrganization(r.Context(), user.ID, orgID); err != nil {
+		writeServiceError(w, r, err)
+		return
+	}
+	render.JSON(w, http.StatusOK, map[string]string{"status": "left"})
 }
 
 func (h OrgHandler) AddMember(w http.ResponseWriter, r *http.Request) {
