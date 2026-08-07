@@ -167,6 +167,10 @@
   border-top: 1px solid var(--border);
 }
 
+.memberForm option[value="owner"] {
+  display: none;
+}
+
 .selectField {
   display: grid;
   gap: 7px;
