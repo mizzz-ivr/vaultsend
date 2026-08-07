@@ -173,6 +173,12 @@ export type OrganizationDetailResponse = {
   members: OrganizationMember[];
 };
 
+export type OrganizationOwnerTransferResponse = {
+  organization: Organization;
+  previous_owner: OrganizationMember;
+  new_owner: OrganizationMember;
+};
+
 export type OrganizationBillingDetails = {
   plan: string;
   status: string;
