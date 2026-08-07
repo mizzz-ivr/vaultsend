@@ -22,6 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             <nav className="header-nav" aria-label="メインナビゲーション">
               <Link className="nav-mobile-hidden" href="/shipments">送信履歴</Link>
               <Link className="nav-mobile-hidden" href="/organizations">組織</Link>
+              <Link className="nav-mobile-hidden" href="/organization-settings">組織設定</Link>
               <Link href="/invitations">招待</Link>
               <Link href="/send">新規送信</Link>
               <Link className="button button-small" href="/auth">ログイン</Link>

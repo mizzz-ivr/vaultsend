@@ -52,11 +52,11 @@ func (s *OrgService) CreateOrg(ctx context.Context, userID uuid.UUID, name strin
 	if userID == uuid.Nil {
 		return OrgOutput{}, &APIError{Status: 401, Code: "unauthorized", Message: "ログインが必要です"}
 	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return OrgOutput{}, &APIError{Status: 400, Code: "invalid_name", Message: "name は必須です"}
+	normalizedName, err := normalizeOrganizationName(name)
+	if err != nil {
+		return OrgOutput{}, err
 	}
-	org, err := s.Store.CreateOrg(ctx, store.CreateOrgParams{Name: name, OwnerUserID: userID})
+	org, err := s.Store.CreateOrg(ctx, store.CreateOrgParams{Name: normalizedName, OwnerUserID: userID})
 	if err != nil {
 		return OrgOutput{}, fmt.Errorf("create org: %w", err)
 	}
@@ -99,8 +99,8 @@ func (s *OrgService) AddMember(ctx context.Context, actorID, orgID, userID uuid.
 		return OrgMemberOutput{}, err
 	}
 	role = strings.TrimSpace(strings.ToLower(role))
-	if role != "owner" && role != "admin" && role != "member" {
-		return OrgMemberOutput{}, &APIError{Status: 400, Code: "invalid_role", Message: "role が不正です"}
+	if role != "admin" && role != "member" {
+		return OrgMemberOutput{}, &APIError{Status: 400, Code: "invalid_role", Message: "role は admin または member を指定してください"}
 	}
 	if _, err := s.Store.GetOrganizationMember(ctx, orgID, userID); err == nil {
 		return OrgMemberOutput{}, &APIError{Status: 409, Code: "member_exists", Message: "既に所属済みです"}
@@ -142,9 +142,21 @@ func (s *OrgService) RemoveMember(ctx context.Context, actorID, orgID, userID uu
 		return err
 	}
 	if role == "admin" && actorID == userID {
-		return &APIError{Status: 409, Code: "cannot_remove_self", Message: "自身は削除できません"}
+		return &APIError{Status: 409, Code: "cannot_remove_self", Message: "自身の退出には退出操作を使用してください"}
 	}
-	if err := s.Store.RemoveMember(ctx, orgID, userID); errors.Is(err, store.ErrNotFound) {
+	target, err := s.Store.GetOrganizationMember(ctx, orgID, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		return &APIError{Status: 404, Code: "member_not_found", Message: "member が見つかりません"}
+	}
+	if err != nil {
+		return err
+	}
+	if target.Role == "owner" {
+		return &APIError{Status: 409, Code: "cannot_remove_owner", Message: "オーナーは削除できません。先にオーナー権限を移譲してください"}
+	}
+	if err := s.Store.RemoveMember(ctx, orgID, userID); errors.Is(err, store.ErrConflict) {
+		return &APIError{Status: 409, Code: "cannot_remove_owner", Message: "オーナーは削除できません。先にオーナー権限を移譲してください"}
+	} else if errors.Is(err, store.ErrNotFound) {
 		return &APIError{Status: 404, Code: "member_not_found", Message: "member が見つかりません"}
 	} else if err != nil {
 		return err
@@ -207,6 +219,12 @@ func (s *OrgService) requireRole(ctx context.Context, userID, orgID uuid.UUID, m
 	}
 	if minimum == "admin" && (m.Role == "admin" || m.Role == "owner") {
 		return m.Role, nil
+	}
+	if minimum == "owner" && m.Role == "owner" {
+		return m.Role, nil
+	}
+	if minimum == "owner" {
+		return "", &APIError{Status: 403, Code: "forbidden", Message: "オーナー権限が必要です"}
 	}
 	return "", &APIError{Status: 403, Code: "forbidden", Message: "admin 以上の権限が必要です"}
 }

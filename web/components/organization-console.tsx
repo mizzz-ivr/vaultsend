@@ -6,6 +6,7 @@ import { api, ApiClientError } from "@/lib/api";
 import type {
   AuthUser,
   InvoiceSummary,
+  InvitationRole,
   Organization,
   OrganizationBillingDetails,
   OrganizationDetailResponse,
@@ -99,7 +100,7 @@ export function OrganizationConsole() {
   const [invoicePage, setInvoicePage] = useState<OrganizationInvoiceListResponse | null>(null);
   const [organizationName, setOrganizationName] = useState("");
   const [memberUserId, setMemberUserId] = useState("");
-  const [memberRole, setMemberRole] = useState<OrganizationRole>("member");
+  const [memberRole, setMemberRole] = useState<InvitationRole>("member");
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -529,11 +530,10 @@ export function OrganizationConsole() {
                         <select
                           id="member-role"
                           value={memberRole}
-                          onChange={(event) => setMemberRole(event.target.value as OrganizationRole)}
+                          onChange={(event) => setMemberRole(event.target.value as InvitationRole)}
                         >
                           <option value="member">メンバー</option>
                           <option value="admin">管理者</option>
-                          {currentRole === "owner" && <option value="owner">オーナー</option>}
                         </select>
                       </div>
                       <button

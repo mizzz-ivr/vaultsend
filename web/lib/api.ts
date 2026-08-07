@@ -19,6 +19,7 @@ import type {
   OrganizationInvoiceListResponse,
   OrganizationListResponse,
   OrganizationMember,
+  OrganizationOwnerTransferResponse,
   OrganizationRole,
   ShipmentDetail,
   ShipmentListResponse,
@@ -172,6 +173,26 @@ export const api = {
   },
   getOrganization(id: string) {
     return request<OrganizationDetailResponse>(`/orgs/${encodeURIComponent(id)}`);
+  },
+  updateOrganization(id: string, name: string) {
+    return request<Organization>(`/orgs/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
+  },
+  transferOrganizationOwner(id: string, targetUserId: string) {
+    return request<OrganizationOwnerTransferResponse>(
+      `/orgs/${encodeURIComponent(id)}/owner-transfer`,
+      {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: targetUserId }),
+      },
+    );
+  },
+  leaveOrganization(id: string) {
+    return request<{ status: string }>(`/orgs/${encodeURIComponent(id)}/leave`, {
+      method: "POST",
+    });
   },
   addOrganizationMember(
     id: string,

@@ -1,0 +1,187 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 5.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.content {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.section,
+.summary,
+.dangerSection {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.dangerSection {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--border));
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.sectionHeading h2,
+.sectionHeading p,
+.emptyMessage p,
+.transferExplanation p,
+.dangerRow p {
+  margin: 0;
+}
+
+.sectionHeading p,
+.emptyMessage,
+.transferExplanation p,
+.dangerRow p,
+.permissionNote {
+  color: var(--muted);
+}
+
+.organizationList {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.organizationButton {
+  width: 100%;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.organizationButton:hover,
+.organizationButton[data-active="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.organizationButton span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.definitionList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 0;
+}
+
+.definitionList div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.8rem;
+  border-radius: 0.8rem;
+  background: var(--surface-muted);
+  min-width: 0;
+}
+
+.definitionList dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.definitionList dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.inlineForm,
+.transferArea {
+  display: grid;
+  gap: 1rem;
+}
+
+.inlineForm {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.transferArea select {
+  width: 100%;
+}
+
+.transferExplanation {
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--surface-muted);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dangerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dangerRow > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.permissionNote {
+  margin: 0;
+}
+
+.emptyMessage {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .organizationList {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .sectionHeading,
+  .dangerRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .definitionList,
+  .inlineForm {
+    grid-template-columns: 1fr;
+  }
+
+  .dangerRow button,
+  .inlineForm button,
+  .transferArea button {
+    width: 100%;
+  }
+}
